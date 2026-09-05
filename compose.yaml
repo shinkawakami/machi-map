@@ -1,0 +1,22 @@
+# 開発用の Postgres。
+# 本番は Vercel 側で Neon などのマネージド Postgres に DATABASE_URL を差し替える。
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: machimap
+      POSTGRES_PASSWORD: machimap
+      POSTGRES_DB: machimap
+    # 5432 / 5433 は他プロジェクトが使っているため 5434 を割り当てる
+    ports:
+      - "5434:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U machimap -d machimap"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:
