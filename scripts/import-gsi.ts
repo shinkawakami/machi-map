@@ -170,7 +170,6 @@ async function loadShelters(
       otherMatters: r["その他市町村長が必要と認める事項"]?.trim() || null,
       targetPersons: r["受入対象者"]?.trim() || null,
       note: r["備考"]?.trim() || null,
-      raw: r,
     };
   });
 }

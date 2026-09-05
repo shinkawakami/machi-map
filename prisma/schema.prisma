@@ -100,8 +100,6 @@ model Shelter {
   targetPersons String?
   note          String?
 
-  /// 取り込んだ元の行。取り込みロジックを直したときに再パースできるようにする。
-  raw        Json
   importedAt DateTime @default(now())
 
   /// 矩形で絞ってから距離順に並べるための索引。PostGIS は使わない。
