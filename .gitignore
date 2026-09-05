@@ -43,3 +43,5 @@ next-env.d.ts
 
 # 個人用のメモ
 /.local/
+
+/src/generated/prisma

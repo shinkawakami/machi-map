@@ -1,0 +1,126 @@
+// machi-map / にげどこ
+// データ源: 国土地理院「指定緊急避難場所・指定避難所データ」
+// 設計の根拠は .local/PLAN.md「スキーマ」を参照
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/// 指定の種別。このデータは「施設」ではなく「指定」のリストなので、
+/// 1行 = 1つの指定として持ち、施設としてのマージはしない。
+enum ShelterKind {
+  /// 指定緊急避難場所（災害の危険から命を守るために緊急的に避難する場所）
+  EMERGENCY
+  /// 指定避難所（災害の危険がなくなるまでの一時的な避難施設）
+  SHELTER
+}
+
+enum ImportStatus {
+  RUNNING
+  SUCCESS
+  FAILED
+}
+
+/// 市町村マスタ。国土地理院 publicHistoryListData.csv をそのまま投入する（1,747件）。
+/// データが1件も無い市町村も行を作る（カバー率ページの母数になる）。
+model Municipality {
+  /// 全国地方公共団体コード 5桁
+  code String @id @db.Char(5)
+
+  prefecture String
+  name       String
+  /// 『都道府県名及び市町村名』の連結表記。避難場所データ側との結合キー。
+  /// 実データで両者は100%文字列一致することを確認済み。
+  fullName   String @unique
+
+  /// 国土地理院が公開を開始した日
+  publishedAt   DateTime? @db.Date
+  /// 国土地理院のデータベースが更新された日（市町村長による指定日ではない）。
+  /// 月次更新の差分検知に使う。
+  lastUpdatedAt DateTime? @db.Date
+
+  /// 整備状況。null=両方公開 / 11=指定緊急避難場所のみ / 12=指定避難所のみ / 9=データ未登録
+  statusCode String?
+  statusText String?
+
+  /// 投入後に集計して埋める（カバー率ページ用）
+  emergencyCount Int @default(0)
+  shelterCount   Int @default(0)
+
+  shelters Shelter[]
+
+  @@index([prefecture])
+  @@index([statusCode])
+}
+
+/// 1行 = 1つの指定（指定緊急避難場所 または 指定避難所）。
+model Shelter {
+  id String @id @default(cuid())
+
+  /// 全国共通避難所・避難場所ID（14桁）。末尾3桁が種別を表し、
+  /// 2つのデータセット間で重複しないことを実データで確認済み（=全体で一意）。
+  /// 月次の再取り込みはこのキーで upsert する。
+  sourceId String      @unique
+  kind     ShelterKind
+
+  municipalityCode String       @db.Char(5)
+  municipality     Municipality @relation(fields: [municipalityCode], references: [code])
+
+  name    String
+  address String
+  lat     Float
+  lng     Float
+
+  /// 『指定避難所との住所同一』/『指定緊急避難場所との住所同一』フラグ。
+  /// もう一方のデータセットに住所が同じ指定があることを示すだけで、
+  /// 同一施設であることは保証しない（施設名の一致は73%）。
+  sameAddressAsOther Boolean @default(false)
+
+  // --- 災害種別8種 ---
+  // kind=EMERGENCY のとき: true=この災害で使える / false=使えない
+  // kind=SHELTER   のとき: すべて null（指定避難所に災害種別の概念がない）
+  // 実データで、8種すべて false の EMERGENCY は0件であることを確認済み。
+  flood       Boolean?
+  landslide   Boolean?
+  stormSurge  Boolean?
+  earthquake  Boolean?
+  tsunami     Boolean?
+  fire        Boolean?
+  inlandFlood Boolean?
+  volcano     Boolean?
+
+  /// その他市町村長が必要と認める事項（指定避難所のみ・1.2%）
+  otherMatters  String?
+  /// 受入対象者（指定福祉避難所のみ・11.1%）
+  targetPersons String?
+  note          String?
+
+  /// 取り込んだ元の行。取り込みロジックを直したときに再パースできるようにする。
+  raw        Json
+  importedAt DateTime @default(now())
+
+  /// 矩形で絞ってから距離順に並べるための索引。PostGIS は使わない。
+  @@index([lat, lng])
+  @@index([municipalityCode])
+  @@index([kind])
+}
+
+/// データ更新でおかしくなったときに原因を追うための最低限の記録。
+model ImportRun {
+  id       String @id @default(cuid())
+  source   String
+  fileName String
+
+  rowCount   Int?
+  startedAt  DateTime     @default(now())
+  finishedAt DateTime?
+  status     ImportStatus @default(RUNNING)
+  error      String?
+
+  @@index([startedAt])
+}
