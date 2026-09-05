@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "import:gsi": "tsx scripts/import-gsi.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.0",
@@ -23,6 +24,7 @@
     "@types/pg": "^8.23.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "csv-parse": "^7.0.2",
     "dotenv": "^17.4.2",
     "eslint": "^9",
     "eslint-config-next": "16.3.4",
