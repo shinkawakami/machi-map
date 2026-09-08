@@ -14,6 +14,8 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Prisma の生成物
     "src/generated/**",
+    // node_modules からコピーしている maplibre-gl のワーカー
+    "public/maplibre/**",
   ]),
 ]);
 
