@@ -10,7 +10,11 @@ import type {
 } from "maplibre-gl";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import type { SheltersResult } from "@/lib/shelters";
+import ShelterFilterBar from "@/components/ShelterFilterBar";
+import ShelterPanel, { type PanelState } from "@/components/ShelterPanel";
+import { kindOf } from "@/lib/kinds";
+import type { LatLng } from "@/lib/nearby";
+import type { ShelterFilter, SheltersResult } from "@/lib/shelters";
 
 /**
  * 背景地図は地理院タイル（淡色地図）。避難場所の点を載せるので、
@@ -55,14 +59,19 @@ const MAX_BOUNDS: [[number, number], [number, number]] = [
   [180, 60],
 ];
 
-const COLOR_EMERGENCY = "#ea580c";
-const COLOR_SHELTER = "#1d4ed8";
+// 色は lib/kinds.ts が唯一の出どころ。凡例（フィルタの種別ボタン）と必ずそろえる。
+const COLOR_EMERGENCY = kindOf("EMERGENCY").color;
+const COLOR_SHELTER = kindOf("SHELTER").color;
 
 /** クラスタの目標セルサイズ（px）。画面幅から横方向の分割数を決める。 */
 const CLUSTER_CELL_PX = 80;
 
 const SOURCE_ID = "shelters";
 const LAYER_ID = "shelter-points";
+
+/** 現在地と選択中の点。避難場所の点より上に重ねる。 */
+const ME_SOURCE_ID = "my-location";
+const SELECTED_SOURCE_ID = "selected-shelter";
 
 type Status =
   | { state: "loading" }
@@ -77,6 +86,24 @@ export default function ShelterMap() {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [status, setStatus] = useState<Status>({ state: "loading" });
+  const [filter, setFilter] = useState<ShelterFilter>({
+    // 開いた瞬間に中身が入っていることを優先する。既定は絞り込みなし。
+    kinds: ["EMERGENCY", "SHELTER"],
+    disaster: null,
+  });
+
+  const [panel, setPanel] = useState<PanelState>({ state: "closed" });
+  const [myLocation, setMyLocation] = useState<LatLng | null>(null);
+  const [selected, setSelected] = useState<LatLng | null>(null);
+  const [locating, setLocating] = useState(false);
+  const [locateError, setLocateError] = useState<string | null>(null);
+  // 地図に足したソースへ setData できるようになった時点。
+  const [mapReady, setMapReady] = useState(false);
+
+  // load() は地図を作る effect の中で閉じており、filter を直接読むと
+  // 絞り込みを変えるたびに地図が作り直される。ref で最新を渡す。
+  const filterRef = useRef(filter);
+  const loadRef = useRef<(() => void) | null>(null);
 
   const clearMarkers = useCallback(() => {
     for (const marker of markersRef.current) marker.remove();
@@ -94,7 +121,6 @@ export default function ShelterMap() {
         Map,
         Marker,
         NavigationControl,
-        Popup,
         setWorkerUrl,
       } = await import("maplibre-gl");
       if (disposed || !containerRef.current) return;
@@ -142,6 +168,13 @@ export default function ShelterMap() {
         const cells = Math.round(
           map.getContainer().clientWidth / CLUSTER_CELL_PX,
         );
+        const { kinds, disaster } = filterRef.current;
+        const query = new URLSearchParams({
+          bbox,
+          cells: String(cells),
+          kinds: kinds.join(","),
+        });
+        if (disaster) query.set("disaster", disaster);
 
         abortRef.current?.abort();
         const controller = new AbortController();
@@ -149,10 +182,9 @@ export default function ShelterMap() {
         setStatus({ state: "loading" });
 
         try {
-          const res = await fetch(
-            `/api/shelters?bbox=${bbox}&cells=${cells}`,
-            { signal: controller.signal },
-          );
+          const res = await fetch(`/api/shelters?${query}`, {
+            signal: controller.signal,
+          });
           if (!res.ok) throw new Error(`API が ${res.status} を返しました`);
           const result: SheltersResult = await res.json();
           if (disposed) return;
@@ -236,17 +268,15 @@ export default function ShelterMap() {
           },
         });
 
+        // 詳細は吹き出しではなく下段のパネルに出す。スマホで指と吹き出しが
+        // 重なるのを避けたいのと、近い順の一覧と表示を使い回せるため。
         map.on("click", LAYER_ID, (event) => {
           const feature = event.features?.[0];
           if (!feature) return;
-          const { name, kind } = feature.properties as {
-            name: string;
-            kind: string;
-          };
-          new Popup({ offset: 12, closeButton: false })
-            .setLngLat(event.lngLat)
-            .setDOMContent(popupContent(name, kind))
-            .addTo(map);
+          const { id } = feature.properties as { id: string };
+          const [lng, lat] = (feature.geometry as GeoJSON.Point).coordinates;
+          setSelected({ lat, lng });
+          setPanel({ state: "detail", id });
         });
         map.on("mouseenter", LAYER_ID, () => {
           map.getCanvas().style.cursor = "pointer";
@@ -254,6 +284,38 @@ export default function ShelterMap() {
         map.on("mouseleave", LAYER_ID, () => {
           map.getCanvas().style.cursor = "";
         });
+
+        // 現在地と選択中の点。中身は別の effect から setData で入れる。
+        for (const id of [ME_SOURCE_ID, SELECTED_SOURCE_ID]) {
+          map.addSource(id, {
+            type: "geojson",
+            data: { type: "FeatureCollection", features: [] },
+          });
+        }
+        map.addLayer({
+          id: SELECTED_SOURCE_ID,
+          type: "circle",
+          source: SELECTED_SOURCE_ID,
+          paint: {
+            "circle-radius": 11,
+            "circle-color": "#ffffff",
+            "circle-opacity": 0,
+            "circle-stroke-width": 3,
+            "circle-stroke-color": "#18181b",
+          },
+        });
+        map.addLayer({
+          id: ME_SOURCE_ID,
+          type: "circle",
+          source: ME_SOURCE_ID,
+          paint: {
+            "circle-radius": 7,
+            "circle-color": "#2563eb",
+            "circle-stroke-width": 3,
+            "circle-stroke-color": "#ffffff",
+          },
+        });
+        setMapReady(true);
 
         // moveend の購読はソースを足した後で始める。
         // 先に発火すると setData の相手がまだ無い。
@@ -263,6 +325,7 @@ export default function ShelterMap() {
           timerRef.current = setTimeout(() => void load(), 200);
         });
 
+        loadRef.current = () => void load();
         void load();
       });
     })();
@@ -272,27 +335,145 @@ export default function ShelterMap() {
       if (timerRef.current) clearTimeout(timerRef.current);
       abortRef.current?.abort();
       clearMarkers();
+      loadRef.current = null;
+      setMapReady(false);
       mapRef.current?.remove();
       mapRef.current = null;
     };
   }, [clearMarkers]);
 
+  // 絞り込みが変わったら取り直す。初回は地図の load がまだなので loadRef が空で、
+  // その場合は load 側の初回呼び出しが拾う。
+  useEffect(() => {
+    filterRef.current = filter;
+    loadRef.current?.();
+  }, [filter]);
+
+  useEffect(() => {
+    if (!mapReady) return;
+    mapRef.current
+      ?.getSource<GeoJSONSource>(ME_SOURCE_ID)
+      ?.setData(pointFeatures(myLocation));
+  }, [mapReady, myLocation]);
+
+  useEffect(() => {
+    if (!mapReady) return;
+    mapRef.current
+      ?.getSource<GeoJSONSource>(SELECTED_SOURCE_ID)
+      ?.setData(pointFeatures(selected));
+  }, [mapReady, selected]);
+
+  /** 一覧で選ばれた場所に寄る。すでに寄っているときはズームを戻さない。 */
+  const focus = useCallback((target: LatLng) => {
+    setSelected(target);
+    const map = mapRef.current;
+    if (!map) return;
+    map.flyTo({
+      center: [target.lng, target.lat],
+      zoom: Math.max(map.getZoom(), 15),
+    });
+  }, []);
+
+  /**
+   * 現在地を取る。HTTPS でないと（localhost を除いて）ブラウザが拒否するので、
+   * 本番の https://nigedoko.vercel.app/ が前提。
+   */
+  const locate = useCallback(() => {
+    if (!navigator.geolocation) {
+      setLocateError("このブラウザでは現在地を使えません");
+      return;
+    }
+
+    setLocating(true);
+    setLocateError(null);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const here = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        };
+        setLocating(false);
+        setMyLocation(here);
+        setPanel({ state: "list" });
+        // 徒歩圏が見える程度まで寄る。点のまま返る件数に収まるズーム。
+        mapRef.current?.flyTo({ center: [here.lng, here.lat], zoom: 14 });
+      },
+      (error) => {
+        setLocating(false);
+        setLocateError(geolocationMessage(error));
+      },
+      { enableHighAccuracy: true, timeout: 10_000, maximumAge: 60_000 },
+    );
+  }, []);
+
   return (
-    <div className="relative min-h-0 flex-1">
-      {/*
-        地図のコンテナに `absolute inset-0` は使えない。MapLibre は要素に
-        `maplibregl-map` クラスを付け、その CSS が `position: relative` を指定する。
-        Tailwind の `.absolute` と詳細度が同じで、読み込み順が後の MapLibre 側が勝つ。
-        結果 inset が効かず高さ 0 になり、MapLibre は既定の 300px にフォールバックして
-        地図が真っ白になる。高さで指定する。
-      */}
-      <div ref={containerRef} className="size-full" />
-      <div className="pointer-events-none absolute inset-x-0 top-0 flex flex-col items-start gap-2 p-3">
-        <StatusChip status={status} />
-        <Legend />
+    <>
+      <ShelterFilterBar value={filter} onChange={setFilter} />
+      <div className="relative min-h-0 flex-1">
+        {/*
+          地図のコンテナに `absolute inset-0` は使えない。MapLibre は要素に
+          `maplibregl-map` クラスを付け、その CSS が `position: relative` を指定する。
+          Tailwind の `.absolute` と詳細度が同じで、読み込み順が後の MapLibre 側が勝つ。
+          結果 inset が効かず高さ 0 になり、MapLibre は既定の 300px にフォールバックして
+          地図が真っ白になる。高さで指定する。
+        */}
+        <div ref={containerRef} className="size-full" />
+        <div className="pointer-events-none absolute inset-x-0 top-0 flex flex-col items-start gap-2 p-3">
+          <button
+            type="button"
+            onClick={locate}
+            disabled={locating}
+            className="pointer-events-auto rounded-full bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white shadow-sm disabled:opacity-60"
+          >
+            {locating ? "現在地を取得中…" : "現在地から探す"}
+          </button>
+          {locateError && <Chip>{locateError}</Chip>}
+          <StatusChip status={status} />
+        </div>
+
+        <ShelterPanel
+          panel={panel}
+          filter={filter}
+          center={myLocation}
+          onClose={() => {
+            setPanel({ state: "closed" });
+            setSelected(null);
+          }}
+          onSelect={(item) => setPanel({ state: "detail", id: item.id })}
+          onBackToList={() => setPanel({ state: "list" })}
+          onFocus={focus}
+        />
       </div>
-    </div>
+    </>
   );
+}
+
+function geolocationMessage(error: GeolocationPositionError): string {
+  switch (error.code) {
+    case error.PERMISSION_DENIED:
+      return "位置情報の利用が許可されていません";
+    case error.POSITION_UNAVAILABLE:
+      return "現在地を取得できませんでした";
+    case error.TIMEOUT:
+      return "現在地の取得に時間がかかっています。もう一度お試しください";
+    default:
+      return "現在地を取得できませんでした";
+  }
+}
+
+function pointFeatures(point: LatLng | null): GeoJSON.FeatureCollection {
+  return {
+    type: "FeatureCollection",
+    features: point
+      ? [
+          {
+            type: "Feature",
+            geometry: { type: "Point", coordinates: [point.lng, point.lat] },
+            properties: {},
+          },
+        ]
+      : [],
+  };
 }
 
 function StatusChip({ status }: { status: Status }) {
@@ -320,27 +501,6 @@ function Chip({ children }: { children: React.ReactNode }) {
   return (
     <div className="rounded-full bg-white/95 px-3 py-1.5 text-xs text-zinc-700 shadow-sm ring-1 ring-black/10">
       {children}
-    </div>
-  );
-}
-
-function Legend() {
-  return (
-    <div className="flex flex-col gap-1 rounded-lg bg-white/95 px-3 py-2 text-xs text-zinc-700 shadow-sm ring-1 ring-black/10">
-      <span className="flex items-center gap-1.5">
-        <span
-          className="size-2.5 rounded-full ring-1 ring-white"
-          style={{ backgroundColor: COLOR_EMERGENCY }}
-        />
-        指定緊急避難場所
-      </span>
-      <span className="flex items-center gap-1.5">
-        <span
-          className="size-2.5 rounded-full ring-1 ring-white"
-          style={{ backgroundColor: COLOR_SHELTER }}
-        />
-        指定避難所
-      </span>
     </div>
   );
 }
@@ -378,28 +538,4 @@ function formatCount(count: number): string {
   if (count >= 10000) return `${Math.round(count / 1000)}k`;
   if (count >= 1000) return `${(count / 1000).toFixed(1)}k`;
   return String(count);
-}
-
-function popupContent(name: string, kind: string): HTMLElement {
-  const root = document.createElement("div");
-  root.style.cssText = "font-size:13px;line-height:1.5;max-width:16rem";
-
-  const badge = document.createElement("span");
-  badge.textContent =
-    kind === "EMERGENCY" ? "指定緊急避難場所" : "指定避難所";
-  badge.style.cssText = [
-    "display:inline-block",
-    "padding:1px 6px",
-    "border-radius:9999px",
-    "font-size:11px",
-    "color:#ffffff",
-    `background:${kind === "EMERGENCY" ? COLOR_EMERGENCY : COLOR_SHELTER}`,
-  ].join(";");
-
-  const title = document.createElement("div");
-  title.textContent = name;
-  title.style.cssText = "margin-top:4px;font-weight:600";
-
-  root.append(badge, title);
-  return root;
 }
