@@ -103,7 +103,12 @@ model Shelter {
   importedAt DateTime @default(now())
 
   /// 矩形で絞ってから距離順に並べるための索引。PostGIS は使わない。
-  @@index([lat, lng])
+  ///
+  /// lat/lng に続けて kind と災害種別8種を載せてある。列の多さは意図的で、
+  /// クラスタ集約（count と avg だけを読む集約クエリ）を Index Only Scan に保つため。
+  /// lat/lng だけの索引だと、災害種別で絞った瞬間にフラグを読むために heap へ行き、
+  /// プランが Seq Scan に倒れる。実測は .local/PLAN.md「災害種別の索引」を参照。
+  @@index([lat, lng, kind, flood, landslide, stormSurge, earthquake, tsunami, fire, inlandFlood, volcano], map: "Shelter_bbox_filter_idx")
   @@index([municipalityCode])
   @@index([kind])
 }
