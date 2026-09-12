@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 /**
  * 出典表示は国土地理院コンテンツ利用規約（公共データ利用規約 PDL1.0）上の義務。
  * 加工しているので「もとに作成」の一文も省略できない。常設し、消さない。
@@ -28,6 +30,12 @@ export default function SiteFooter() {
       <p>
         市町村が登録し公開に同意したものに限られ、最新でない場合や未掲載の場合があります。
         実際の避難では必ず市町村の指示に従ってください。
+        <Link
+          className="ml-1 underline underline-offset-2 hover:text-zinc-800"
+          href="/coverage"
+        >
+          データの公開状況
+        </Link>
       </p>
     </footer>
   );
