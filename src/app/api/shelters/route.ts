@@ -1,10 +1,12 @@
-import { fetchShelters, parseBbox, parseCells } from "@/lib/shelters";
+import { fetchShelters, parseBbox, parseCells, parseFilter } from "@/lib/shelters";
 
 /**
- * GET /api/shelters?bbox=west,south,east,north&cells=16
+ * GET /api/shelters?bbox=west,south,east,north&cells=16&kinds=EMERGENCY,SHELTER&disaster=flood
  *
  * 表示範囲に入る避難場所を返す。件数が多いときはサーバー側で
  * グリッド集約したクラスタを返す（判定は lib/shelters.ts）。
+ *
+ * bbox 以外の引数は不正でも 400 にせず既定に落とす。地図が出ないほうが損なので。
  */
 export async function GET(request: Request) {
   const params = new URL(request.url).searchParams;
@@ -17,6 +19,10 @@ export async function GET(request: Request) {
     );
   }
 
-  const result = await fetchShelters(bbox, parseCells(params.get("cells")));
+  const result = await fetchShelters(
+    bbox,
+    parseCells(params.get("cells")),
+    parseFilter(params),
+  );
   return Response.json(result);
 }
