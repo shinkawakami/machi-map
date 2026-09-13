@@ -49,6 +49,10 @@ export function parseLatLng(params: URLSearchParams): LatLng | null {
 }
 
 export function parseLimit(raw: string | null): number {
+  // `Number(null)` も `Number("")` も 0 になる。0 は有限なのでそのまま通り、
+  // 下の clamp で 1 に丸められる。**省略されたときに1件しか返らない**ので、
+  // 数に変換する前に「指定が無い」を弾く。
+  if (!raw?.trim()) return DEFAULT_LIMIT;
   const n = Number(raw);
   if (!Number.isFinite(n)) return DEFAULT_LIMIT;
   return Math.round(Math.min(Math.max(n, 1), MAX_LIMIT));
