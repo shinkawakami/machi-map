@@ -35,3 +35,34 @@ export function isDisasterKey(value: string): value is DisasterKey {
 export function disasterLabel(key: DisasterKey): string {
   return DISASTER_TYPES.find((d) => d.key === key)!.label;
 }
+
+/**
+ * 選んだ災害種別を **DISASTER_TYPES の順に並べ直し、重複を落とす。**
+ *
+ * **並びを固定するのはキャッシュのため。** 絞り込みはクエリ文字列に出て、
+ * CDN は URL をキーにする（lib/http-cache.ts）。押した順のまま並べると
+ * `flood,earthquake` と `earthquake,flood` が別の URL になり、同じ問い合わせが
+ * 2つのキーに散る。8種から選ぶと順列は最大 40,320 通りあるので、
+ * 丸めずに置くと bbox を格子に吸着させた意味が薄れる（lib/grid.ts と同じ話）。
+ *
+ * 並べ替えの基準に CSV の列順を使うのは、ここが唯一の出どころだから。
+ * UI の表示順もこれなので、URL を見たときに画面と同じ順で読める。
+ */
+export function canonicalDisasters(keys: readonly string[]): DisasterKey[] {
+  const wanted = new Set(keys);
+  return DISASTER_TYPES.map((d) => d.key).filter((key) => wanted.has(key));
+}
+
+/** クエリ文字列に載せる形。空なら空文字（呼ぶ側が載せない判断をする）。 */
+export function encodeDisasters(keys: readonly DisasterKey[]): string {
+  return canonicalDisasters(keys).join(",");
+}
+
+/**
+ * クエリ文字列から読む。知らない値は黙って捨てる。
+ * 単一だったころの `?disaster=flood` もそのまま通る（1要素として読める）。
+ */
+export function parseDisasters(raw: string | null): DisasterKey[] {
+  if (!raw) return [];
+  return canonicalDisasters(raw.split(",").filter(isDisasterKey));
+}

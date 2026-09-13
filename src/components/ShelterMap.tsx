@@ -24,6 +24,7 @@ import ShelterPanel, {
   type Origin,
   type PanelView,
 } from "@/components/ShelterPanel";
+import { encodeDisasters } from "@/lib/disasters";
 import { filterBadges } from "@/lib/filter-view";
 import { snapBbox, snapCells } from "@/lib/grid";
 import { kindOf } from "@/lib/kinds";
@@ -162,7 +163,7 @@ export default function ShelterMap() {
   const [filter, setFilter] = useState<ShelterFilter>({
     // 開いた瞬間に中身が入っていることを優先する。既定は絞り込みなし。
     kinds: ["EMERGENCY", "SHELTER"],
-    disaster: null,
+    disasters: [],
   });
 
   /**
@@ -342,13 +343,19 @@ export default function ShelterMap() {
         const cells = snapCells(
           map.getContainer().clientWidth / CLUSTER_CELL_PX,
         );
-        const { kinds, disaster } = filterRef.current;
+        const { kinds, disasters } = filterRef.current;
         const query = new URLSearchParams({
           bbox,
           cells: String(cells),
           kinds: kinds.join(","),
         });
-        if (disaster) query.set("disaster", disaster);
+        /*
+          並びは正規化してから載せる（lib/disasters.ts）。押した順のままだと
+          同じ絞り込みが別の URL に散って、bbox を格子に吸着させた意味が薄れる。
+        */
+        if (disasters.length > 0) {
+          query.set("disaster", encodeDisasters(disasters));
+        }
 
         abortRef.current?.abort();
         const controller = new AbortController();
@@ -1277,6 +1284,16 @@ function MapChips({
           </strong> 件
         </Chip>
       )}
+      {/*
+        **絞り込みで0件になったことは、言わないと分からない。** 絞り込み中は
+        件数を譲っている（上）ので、残るのは「…で絞り込み中」だけになり、
+        点が消えた地図を「まだ読み込んでいない」と読み分けられない。
+        災害種別を複数選べるようにして**0件が普通に起きるようになった**ので
+        （AND なので条件を足すほど減る）、そのときだけ言う。
+      */}
+      {status.state === "ready" &&
+        badges.length > 0 &&
+        status.result.total === 0 && <Chip>このあたりに該当なし</Chip>}
     </>
   );
 }

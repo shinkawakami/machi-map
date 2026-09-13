@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import AddressSearch from "@/components/AddressSearch";
 import ShelterDetailView from "@/components/ShelterDetailView";
 import ShelterFilterBar from "@/components/ShelterFilterBar";
-import { disasterLabel } from "@/lib/disasters";
+import { disasterLabel, encodeDisasters } from "@/lib/disasters";
 import { filterBadges } from "@/lib/filter-view";
 import { roundCoord } from "@/lib/grid";
 import { formatDistance } from "@/lib/format";
@@ -763,7 +763,10 @@ function NearbyList({
       lng: String(roundCoord(origin.lng)),
       kinds: filter.kinds.join(","),
     });
-    if (filter.disaster) query.set("disaster", filter.disaster);
+    // 並びは正規化済み。地図側と同じ形にして、同じ URL に落ちるようにする。
+    if (filter.disasters.length > 0) {
+      query.set("disaster", encodeDisasters(filter.disasters));
+    }
 
     (async () => {
       try {
@@ -928,7 +931,7 @@ function nearbyKey(origin: Origin | null, filter: ShelterFilter): string {
     origin?.lat,
     origin?.lng,
     filter.kinds.join("+"),
-    filter.disaster,
+    filter.disasters.join("+"),
   ].join("/");
 }
 

@@ -29,15 +29,23 @@ export type FilterBadge = {
 export function filterBadges(filter: ShelterFilter): FilterBadge[] {
   const badges: FilterBadge[] = [];
 
-  if (filter.disaster) {
+  if (filter.disasters.length > 0) {
+    const names = filter.disasters.map(disasterLabel).join("・");
     badges.push({
       key: "disaster",
       /*
         **「洪水で使える場所だけ」とは言わない。** 指定避難所には災害種別の指定が
         無く、災害で絞っているあいだも対象外として残る（lib/shelters.ts の
         sqlWhereFor）。ここで言い切ると、その避難所が洪水で使えると読める。
+
+        **複数のときは「両方」「すべて」を必ず入れる。** 絞り込みは AND なので、
+        名前を並べただけだと「洪水・地震のどちらかで使える」と読まれうる。
+        地図に出ている点の意味が反対になるので、ここは字数より正確さを取る。
       */
-      label: `${disasterLabel(filter.disaster)}で絞り込み中`,
+      label:
+        filter.disasters.length === 1
+          ? `${names}で絞り込み中`
+          : `${names}の${filter.disasters.length === 2 ? "両方" : "すべて"}で絞り込み中`,
     });
   }
 

@@ -3,7 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { ShelterKind } from "@/generated/prisma/enums";
-import { DISASTER_TYPES } from "@/lib/disasters";
+import {
+  canonicalDisasters,
+  DISASTER_TYPES,
+  type DisasterKey,
+  disasterLabel,
+} from "@/lib/disasters";
 import { KINDS } from "@/lib/kinds";
 import type { ShelterFilter } from "@/lib/shelters";
 
@@ -14,8 +19,16 @@ import type { ShelterFilter } from "@/lib/shelters";
  * ところが拠点ごとの「8種 × 最寄り」の表が8種を一度に出すようになり、
  * 地図を絞る場面自体が減った。常時その幅を取る理由がない。
  *
- * 災害種別は単一選択。「今この災害が起きたらどこへ逃げるか」という問いに
- * 対応させたいので、複数の災害で使える場所を探す掛け合わせにはしない。
+ * 災害種別は**複数選択**（2026-09-13 に単一選択から変えた）。
+ *
+ * もとは単一で、理由は「今この災害が起きたらどこへ逃げるか」に対応させるため、
+ * としていた。**その問いの立て方自体を先に捨てている。** 調べるきっかけは6つ数えて
+ * 5つが平時で、そのとき知りたいのは「うちの拠点は、心配な災害のどれでも使える場所を
+ * 持っているか」のほう（.local/PLAN.md「利用シーンの整理」）。
+ * 単一選択は、降ろしたはずの発災直後の問いだけに合わせた形だった。
+ *
+ * **掛け合わせは AND（選んだ災害のすべてで使える場所）。** OR にすると、
+ * 地図の点が「どちらの災害で使えるのか」を点からは読めなくなる（lib/shelters.ts）。
  */
 export default function ShelterFilterBar({
   value,
@@ -36,8 +49,27 @@ export default function ShelterFilterBar({
     onChange({ ...value, kinds: next });
   };
 
-  const selected = DISASTER_TYPES.find((d) => d.key === value.disaster);
+  const chosen = value.disasters;
   const shelterVisible = value.kinds.includes("SHELTER");
+
+  /** 押すたびに入れ替える。並びの正規化は lib/disasters.ts に任せる。 */
+  const toggleDisaster = (key: DisasterKey) => {
+    const next = chosen.includes(key)
+      ? chosen.filter((k) => k !== key)
+      : [...chosen, key];
+    onChange({ ...value, disasters: canonicalDisasters(next) });
+  };
+
+  /*
+    畳んだときの見出し。**全部は並べない。** 8種選べるので、そのまま並べると
+    1行のバーが折り返して、畳んである意味が消える。先頭と残りの数で出す。
+  */
+  const summaryLabel =
+    chosen.length === 0
+      ? "災害で絞る"
+      : chosen.length === 1
+        ? disasterLabel(chosen[0])
+        : `${disasterLabel(chosen[0])} +${chosen.length - 1}`;
 
   /*
     最後の1つを押した人に返す一言。理由は title に書いてあったが、
@@ -120,34 +152,32 @@ export default function ShelterFilterBar({
         >
           <summary
             className={`flex min-h-8 cursor-pointer list-none items-center rounded-full border px-2.5 text-[11px] marker:content-none ${
-              selected
+              chosen.length > 0
                 ? "border-zinc-900 bg-zinc-900 font-medium text-white"
                 : "border-zinc-200 text-zinc-500"
             }`}
           >
-            {selected ? selected.label : "災害で絞る"} ▾
+            {summaryLabel} ▾
           </summary>
 
           <div className="absolute right-0 z-20 mt-1 w-60 rounded-lg border border-zinc-200 bg-white p-2 shadow-lg">
             <div className="flex flex-wrap gap-1">
+              {/*
+                **選んでも閉じない。** 複数選ぶ前提なので、1つ押すたびに閉じると
+                開き直しの繰り返しになる。閉じ方は外を押すか Esc（上の effect）。
+              */}
               <DisasterChip
-                selected={value.disaster === null}
-                onClick={() => {
-                  onChange({ ...value, disaster: null });
-                  setOpen(false);
-                }}
+                selected={chosen.length === 0}
+                onClick={() => onChange({ ...value, disasters: [] })}
               >
                 すべて
               </DisasterChip>
               {DISASTER_TYPES.map((disaster) => (
                 <DisasterChip
                   key={disaster.key}
-                  selected={value.disaster === disaster.key}
+                  selected={chosen.includes(disaster.key)}
                   title={disaster.sourceLabel}
-                  onClick={() => {
-                    onChange({ ...value, disaster: disaster.key });
-                    setOpen(false);
-                  }}
+                  onClick={() => toggleDisaster(disaster.key)}
                 >
                   {disaster.label}
                 </DisasterChip>
@@ -161,10 +191,22 @@ export default function ShelterFilterBar({
               */}
               <p>絞り込みは地図と「近い順」に効きます（災害別の表は8種すべて）。</p>
               {/*
+                **AND であることは、2つ目を押した人にだけ言う。** 1つしか選んで
+                いない人には関係がなく、常設すると誰も食い違っていない場面で
+                全員が読まされる（表の上の断り書きで同じことをやって直した）。
+              */}
+              {chosen.length > 1 && (
+                <p className="mt-1">
+                  選んだ{chosen.length}種の
+                  <strong className="font-medium text-zinc-700">すべてで使える</strong>
+                  場所に絞ります（どれかで使える場所、ではありません）
+                </p>
+              )}
+              {/*
                 指定避難所に災害種別の指定は存在しない。黙って全部残すと
                 「洪水で使える避難所」だと読まれてしまうので、そのときだけ断る。
               */}
-              {value.disaster && shelterVisible && (
+              {chosen.length > 0 && shelterVisible && (
                 <p className="mt-1">
                   {KINDS[1].label}には災害種別の指定がないため、絞り込みの対象外です
                 </p>

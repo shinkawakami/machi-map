@@ -1,7 +1,7 @@
 import { Prisma } from "@/generated/prisma/client";
 import type { ShelterKind } from "@/generated/prisma/enums";
 import { prisma } from "@/lib/db";
-import { type DisasterKey, isDisasterKey } from "@/lib/disasters";
+import { type DisasterKey, parseDisasters } from "@/lib/disasters";
 import { type Bbox, cellSizeDeg, clamp, snapCells } from "@/lib/grid";
 
 /**
@@ -31,16 +31,33 @@ export type { Bbox };
 /**
  * 絞り込みの条件。
  *
- * `disaster` は指定緊急避難場所にしか効かない。指定避難所には災害種別の指定が
+ * `disasters` は指定緊急避難場所にしか効かない。指定避難所には災害種別の指定が
  * そもそも存在しない（列自体が無い）ので、絞り込みの対象外として残す。
  * 「この災害では使えない」と「指定がない」を混ぜないための扱いで、
  * 対象外であることは UI 側で明示する。
+ *
+ * **複数選んだときは AND（選んだ災害の“すべて”で使える場所）。** 理由は2つ。
+ *
+ * 1. OR だと「洪水か地震のどちらかで使える」になり、地図に出た点を見ても
+ *    **どちらの災害で使えるのかが点からは読めない**。このアプリの主張1
+ *    （災害の種類ごとに使える・使えないが分かれる）を出すための画面で、
+ *    その区別が消える出し方は採れない。AND なら点の意味が1つに決まる
+ * 2. **OR は絞り込みとして機能しない。** z8 関東の矩形・指定緊急避難場所
+ *    18,887 件で実測すると、洪水 13,073 / 洪水 AND 地震 11,385 /
+ *    洪水 AND 地震 AND 津波 2,104 に対し、**同じ3種の OR は 18,434
+ *    （全体の 97.6%）**。選ぶほど画面が変わらなくなる
+ *
+ * 索引は `(lat, lng, kind, 災害種別8種)` に8種すべてが載っているので、条件を
+ * 足しても **Index Only Scan のまま**（同じ矩形で Heap Fetches 0・buffers 557→555）。
  */
 export type ShelterFilter = {
   /** 表示する種別。空にはならない（空指定は両方として扱う） */
   kinds: ShelterKind[];
-  /** 選択中の災害種別。null なら災害種別で絞らない */
-  disaster: DisasterKey | null;
+  /**
+   * 選択中の災害種別。空なら災害種別で絞らない。
+   * 並びは DISASTER_TYPES の順に正規化されている（canonicalDisasters）。
+   */
+  disasters: DisasterKey[];
 };
 
 export type ShelterPoint = {
@@ -108,11 +125,9 @@ export function parseFilter(params: URLSearchParams): ShelterFilter {
     .split(",")
     .filter((v): v is ShelterKind => ALL_KINDS.includes(v as ShelterKind));
 
-  const disaster = params.get("disaster");
-
   return {
     kinds: kinds.length > 0 ? kinds : [...ALL_KINDS],
-    disaster: disaster && isDisasterKey(disaster) ? disaster : null,
+    disasters: parseDisasters(params.get("disaster")),
   };
 }
 
@@ -288,9 +303,19 @@ function whereFor(bbox: Bbox, filter: ShelterFilter): Prisma.ShelterWhereInput {
     lng: { gte: bbox.west, lte: bbox.east },
     // 両方表示するときは kind の条件を付けない
     ...(filter.kinds.length === 1 ? { kind: filter.kinds[0] } : {}),
-    // 災害種別を持つのは指定緊急避難場所だけ。指定避難所は絞らずに残す。
-    ...(filter.disaster
-      ? { OR: [{ kind: "SHELTER" }, DISASTER_WHERE[filter.disaster]] }
+    /*
+      災害種別を持つのは指定緊急避難場所だけ。指定避難所は絞らずに残す。
+      複数選んだぶんは AND で重ねる（選んだ災害のすべてで使える場所）。
+      索引は (lat, lng, kind, 災害種別8種) に8種すべてが載っているので、
+      条件が増えても Index Only Scan のまま（判断3）。
+    */
+    ...(filter.disasters.length > 0
+      ? {
+          OR: [
+            { kind: "SHELTER" as const },
+            { AND: filter.disasters.map((key) => DISASTER_WHERE[key]) },
+          ],
+        }
       : {}),
   };
 }
@@ -313,12 +338,18 @@ export function sqlWhereFor(bbox: Bbox, filter: ShelterFilter): Prisma.Sql {
     conditions.push(Prisma.sql`kind = ${filter.kinds[0]}::"ShelterKind"`);
   }
 
-  if (filter.disaster) {
+  if (filter.disasters.length > 0) {
     // 列名を SQL に直接埋めるが、値は parseFilter が DISASTER_TYPES の8種に
     // 限っているので任意の文字列は入らない。
-    const column = Prisma.raw(`"${filter.disaster}"`);
+    // 複数は AND（選んだ災害のすべてで使える場所）。whereFor と同じ条件にすること。
+    const flags = Prisma.join(
+      filter.disasters.map(
+        (key) => Prisma.sql`${Prisma.raw(`"${key}"`)} = true`,
+      ),
+      " AND ",
+    );
     conditions.push(
-      Prisma.sql`(kind = 'SHELTER'::"ShelterKind" OR ${column} = true)`,
+      Prisma.sql`(kind = 'SHELTER'::"ShelterKind" OR (${flags}))`,
     );
   }
 
