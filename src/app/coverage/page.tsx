@@ -186,7 +186,7 @@ function Stat({
       <p className="mt-0.5 text-lg font-semibold text-zinc-900">
         {formatCount(value)}
       </p>
-      <p className="text-[11px] text-zinc-400">{percent(value, total)}</p>
+      <p className="text-[11px] text-zinc-500">{percent(value, total)}</p>
     </div>
   );
 }

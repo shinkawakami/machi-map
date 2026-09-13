@@ -174,7 +174,7 @@ function Row({
             </span>
           </>
         ) : (
-          <span className="text-zinc-400">
+          <span className="text-zinc-600">
             この付近に、この災害で使える指定がありません
           </span>
         )}

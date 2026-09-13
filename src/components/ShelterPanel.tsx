@@ -11,7 +11,7 @@ import type { GeocodeHit } from "@/lib/geocode";
 import { kindOf } from "@/lib/kinds";
 import type { LatLng, NearbyItem, NearbyResult } from "@/lib/nearby";
 import type { PlaceSummary } from "@/lib/place-summary";
-import type { Place } from "@/lib/places";
+import { MAX_PLACES, type Place } from "@/lib/places";
 import type { ShelterDetail } from "@/lib/shelter-detail";
 import type { ShelterFilter } from "@/lib/shelters";
 
@@ -20,7 +20,7 @@ import type { ShelterFilter } from "@/lib/shelters";
  *
  * **地図に重ねる操作は持たない。** 以前は「場所を決める」が中央のカード・下のバー・
  * 左上のボタンに散っていて、同じ仕事なのに見る場所が毎回変わっていた。
- * ここに集めて、地図には地図の一部（十字・ピン・現在地・件数）だけを残す。
+ * ここに集めて、地図には地図の一部（ピン・現在地の印・件数）だけを残す。
  */
 export type PanelView =
   /** 災害8種ぶんの最寄りをまとめた表。拠点の「持ち帰れるもの」 */
@@ -66,7 +66,10 @@ export default function ShelterPanel({
   onRemovePlace,
   removedPlace,
   onUndoRemove,
+  undoableOrigin,
+  onUndoOrigin,
   onSavePlace,
+  saveFull,
   onShare,
   onFocus,
 }: {
@@ -87,8 +90,13 @@ export default function ShelterPanel({
   /** 直前に消した拠点。しばらくは戻せるようにしておく */
   removedPlace: Place | null;
   onUndoRemove: () => void;
+  /** 地図を押して起点が移ったときの、戻り先。無ければ null */
+  undoableOrigin: Origin | null;
+  onUndoOrigin: () => void;
   /** 起点をまだ拠点にしていないときだけ渡す */
   onSavePlace?: () => void;
+  /** 保存ボタンが無いのが「上限に達したから」のとき */
+  saveFull: boolean;
   onShare: () => void;
   onFocus: (target: LatLng) => void;
 }) {
@@ -128,7 +136,7 @@ export default function ShelterPanel({
             onClick={onToggleCollapsed}
             aria-expanded={!collapsed}
             aria-label={collapsed ? "パネルを開く" : "パネルを畳む"}
-            className="shrink-0 rounded px-2 py-1 text-zinc-400 hover:text-zinc-900 md:hidden"
+            className="shrink-0 rounded px-2 py-1 text-zinc-500 hover:text-zinc-900 md:hidden"
           >
             {collapsed ? "▲" : "▼"}
           </button>
@@ -165,7 +173,12 @@ export default function ShelterPanel({
                   type="button"
                   aria-label={`${place.name}を削除`}
                   onClick={() => onRemovePlace(place.name)}
-                  className="px-1 text-[11px] text-zinc-300 hover:text-zinc-700"
+                  /*
+                    消す操作。指で押せる大きさ（24px）と、見える濃さにする。
+                    元は 16px 角・zinc-300（白地で 1.5:1）で、隣の拠点ボタンと
+                    紛れていた。戻せる（下の帯）とはいえ、当たりやすさの話は別。
+                  */
+                  className="flex size-6 shrink-0 items-center justify-center rounded text-[11px] text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900"
                 >
                   ✕
                 </button>
@@ -197,18 +210,44 @@ export default function ShelterPanel({
       )}
 
       {/*
+        地図を押して起点が移ったときの戻り口。**畳んでいても出す。**
+        拠点を消したときの帯（上）は畳んだら引っ込めているが、こちらは事情が逆で、
+        地図を押し間違えるのは**畳んで地図を広く見ているとき**がいちばん多い。
+        出す場所を揃えるより、要るときに出ているほうを取る。
+      */}
+      {undoableOrigin && (
+        <div className="flex shrink-0 items-center gap-2 border-b border-zinc-100 bg-zinc-900 px-3 py-2 text-xs text-white">
+          <span className="min-w-0 flex-1 truncate">
+            起点を
+            {undoableOrigin.name
+              ? `「${undoableOrigin.name}」`
+              : originLabel(undoableOrigin)}
+            から移しました
+          </span>
+          <button
+            type="button"
+            onClick={onUndoOrigin}
+            className="shrink-0 rounded border border-white/30 px-2 py-1 text-[11px] font-medium hover:bg-white/10"
+          >
+            元に戻す
+          </button>
+        </div>
+      )}
+
+      {/*
         起点の名前だけの行は持たない。拠点なら上の★が光っているし、
         地図にはピンが立っていて、どこの話かはそれで足りる。
         1行まるごと使うほどの情報ではなかった。
       */}
-      {view.state === "detail" && origin && !collapsed && (
+      {view.state === "detail" && !collapsed && (
         <div className="flex shrink-0 items-center gap-2 border-b border-zinc-100 px-3 py-1.5">
           <button
             type="button"
             onClick={() => onShow(view.from)}
-            className="rounded px-1 text-xs text-zinc-500 hover:text-zinc-900"
+            className="rounded px-2 py-1 text-xs text-zinc-500 hover:text-zinc-900"
           >
-            ← {view.from === "summary" ? "表" : "一覧"}
+            {/* 起点がまだ無いときの戻り先は表でも一覧でもなく、場所を決める案内。 */}
+            ← {!origin ? "戻る" : view.from === "summary" ? "表" : "一覧"}
           </button>
           <h2 className="text-xs font-semibold text-zinc-700">
             {TITLES.detail}
@@ -243,7 +282,14 @@ export default function ShelterPanel({
           collapsed ? "hidden md:block" : ""
         }`}
       >
-        {!origin && <EmptyState hasPlaces={places.length > 0} />}
+        {/*
+          **詳細は起点が無くても出す。** 開いた直後の例の地図にも点は出ていて、
+          押されるのはたいていそこから。起点が決まるまで出さない作りにしていたので、
+          初めて来た人が点を押すと、選択の輪だけが出て中身が出なかった。
+        */}
+        {!origin && view.state !== "detail" && (
+          <EmptyState hasPlaces={places.length > 0} />
+        )}
         {origin && view.state === "summary" && (
           <SummaryTable
             key={originKey(origin)}
@@ -259,10 +305,16 @@ export default function ShelterPanel({
             onFocus={onFocus}
           />
         )}
-        {origin && view.state === "detail" && (
-          <DetailPane key={view.id} id={view.id} />
-        )}
+        {view.state === "detail" && <DetailPane key={view.id} id={view.id} />}
       </div>
+
+      {/* 保存ボタンが出ない理由のうち、上限のほうは言わないと分からない。 */}
+      {!collapsed && saveFull && (
+        <p className="shrink-0 border-t border-zinc-100 bg-zinc-50 px-3 py-2 text-[11px] leading-relaxed text-zinc-600">
+          拠点は{MAX_PLACES}つまでです。ここを拠点にするには、上の★から
+          要らないものを消してください。
+        </p>
+      )}
 
       {/*
         持ち帰る導線はパネルの最下段に固定する。
@@ -423,6 +475,13 @@ function SummaryTable({
 
   return (
     <>
+      {/*
+        絞り込みバーはこの表の上にあるが、表はそれを見ない（8種すべてが並ぶこと
+        自体が答えなので）。押しても表が動かない理由を、押す人の目の高さで言う。
+      */}
+      <p className="border-b border-zinc-100 px-3 py-1.5 text-[11px] leading-relaxed text-zinc-500">
+        この表は絞り込みの対象外です（8種すべてを出します）。上の絞り込みは地図に効きます。
+      </p>
       <ul className="divide-y divide-zinc-100">
         {summary.rows.map((row) => (
           <li key={row.disaster}>
@@ -483,7 +542,7 @@ function SummaryRowView({
         <span className="w-16 shrink-0 text-xs font-semibold text-zinc-900">
           {label}
         </span>
-        <span className="text-xs text-zinc-400">見つかりませんでした</span>
+        <span className="text-xs text-zinc-500">見つかりませんでした</span>
       </div>
     );
   }

@@ -62,7 +62,7 @@ export default function AddressSearch({
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder="住所で探す（例: 千代田区内幸町）"
-        className="w-full rounded-lg border border-zinc-200 bg-white px-2.5 py-2 text-sm text-zinc-900 placeholder:text-zinc-400"
+        className="w-full rounded-lg border border-zinc-200 bg-white px-2.5 py-2 text-sm text-zinc-900 placeholder:text-zinc-500"
       />
 
       {failed && (
@@ -92,7 +92,7 @@ export default function AddressSearch({
       )}
 
       {ready && !failed && visible.length === 0 && (
-        <p className="mt-1 text-[11px] text-zinc-400">
+        <p className="mt-1 text-[11px] text-zinc-500">
           該当する町名が見つかりません（番地までは持っていません）
         </p>
       )}

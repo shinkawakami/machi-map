@@ -17,6 +17,7 @@ import {
   useSyncExternalStore,
 } from "react";
 
+import Modal from "@/components/Modal";
 import SavePlaceDialog from "@/components/SavePlaceDialog";
 import ShareSheet from "@/components/ShareSheet";
 import ShelterPanel, {
@@ -143,6 +144,8 @@ export default function ShelterMap() {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** 「元に戻す」を引っ込めるまでの時計 */
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** 起点を戻せるあいだの時計。拠点の削除とは別に持つ */
+  const originUndoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [status, setStatus] = useState<Status>({ state: "loading" });
   const [filter, setFilter] = useState<ShelterFilter>({
@@ -202,6 +205,23 @@ export default function ShelterMap() {
   const [sharing, setSharing] = useState(false);
   /** 直前に消した拠点。しばらくのあいだ戻せるようにしておく */
   const [removedPlace, setRemovedPlace] = useState<Place | null>(null);
+  /**
+   * 地図を押して起点が移ったときの、戻り先。
+   *
+   * **地図を押す操作だけ、押すつもりが無くても起きる。** 住所・現在地・★は
+   * 自分で選んだ操作なので戻す口は要らないが、地図のタップはパンの終わりと
+   * 見分けがつかず、当たると表が丸ごと入れ替わる。しかも移る前の起点が
+   * 拠点でなければ（住所で指した地点など）、★から戻ることもできない。
+   *
+   * 移った先（to）も一緒に持つ。起点がさらに動いたら、この申し出は古くなって
+   * 黙って消える——押す口をひとつずつ閉じて回らなくて済む。
+   */
+  const [originUndo, setOriginUndo] = useState<{
+    from: Origin;
+    /** 移る前に見ていた面。戻すなら見ていたところまで戻す */
+    fromView: PanelView;
+    to: Origin;
+  } | null>(null);
   const [selected, setSelected] = useState<LatLng | null>(null);
   /** 実際の起点。自分で決めたものが優先で、無ければ拠点の1つ目。 */
   const origin = pickedOrigin ?? autoOrigin;
@@ -212,14 +232,36 @@ export default function ShelterMap() {
   // 地図に足したソースへ setData できるようになった時点。
   const [mapReady, setMapReady] = useState(false);
 
+  /*
+    畳むのは狭い画面だけの話。畳んだまま広い画面に変わると、開くボタンが
+    md:hidden で消えるので、検索も絞り込みも保存も出せないまま戻せなくなる。
+    境目は liftAboveSheet と同じ 768px（Tailwind の md）にそろえる。
+  */
+  useEffect(() => {
+    const wide = window.matchMedia("(min-width: 768px)");
+    const sync = () => {
+      if (wide.matches) setCollapsed(false);
+    };
+    sync();
+    wide.addEventListener("change", sync);
+    return () => wide.removeEventListener("change", sync);
+  }, []);
+
   // load() は地図を作る effect の中で閉じており、filter を直接読むと
   // 絞り込みを変えるたびに地図が作り直される。ref で最新を渡す。
   const filterRef = useRef(filter);
   const loadRef = useRef<(() => void) | null>(null);
   // load() から起点を読むための最新値。filter と同じ理由で ref に置く。
   const originRef = useRef(origin);
+  // 地図の click ハンドラから「移る前に見ていた面」を読むための控え。
+  const viewRef = useRef(view);
   /** いま避難場所の点が地図に出ているか。地図を押したときの意味をこれで決める。 */
   const pointsShownRef = useRef(false);
+  /**
+   * 地図の既定のカーソル。押したときの意味（置く／寄る）とそろえる。
+   * 点の上に乗ったときは pointer に変わるので、離れたらここへ戻す。
+   */
+  const baseCursorRef = useRef("");
 
   useEffect(() => {
     let disposed = false;
@@ -308,6 +350,11 @@ export default function ShelterMap() {
             地方で違う）ので、ズームの数字ではなく実際の結果で判定する。
           */
           pointsShownRef.current = result.mode === "points";
+          // 押せば置ける状態なら crosshair、寄るだけなら zoom-in。
+          // 起点の有無ではなく点の有無で決める（クリックの分岐と同じ基準）。
+          baseCursorRef.current =
+            result.mode === "points" ? "crosshair" : "zoom-in";
+          map.getCanvas().style.cursor = baseCursorRef.current;
 
           const source = map.getSource<GeoJSONSource>(SOURCE_ID);
           if (source) {
@@ -418,16 +465,32 @@ export default function ShelterMap() {
 
           // 置くときは地図を動かさない。押した場所が目の前にあるのに、
           // 勝手に寄ったり中央に寄せたりすると、どこを押したのか見失う。
+          const previous = originRef.current;
+          const previousView = viewRef.current;
+          const next: Origin = { lat, lng, source: "picked" };
+
           setSelected(null);
-          setPickedOrigin({ lat, lng, source: "picked" });
+          setPickedOrigin(next);
           setView({ state: "list" });
+
+          // 戻り先があるときだけ申し出る。まだ起点が無いなら、戻す先も無い。
+          if (previous) {
+            setOriginUndo({ from: previous, fromView: previousView, to: next });
+            if (originUndoTimerRef.current) {
+              clearTimeout(originUndoTimerRef.current);
+            }
+            originUndoTimerRef.current = setTimeout(
+              () => setOriginUndo(null),
+              12_000,
+            );
+          }
         });
 
         map.on("mouseenter", LAYER_ID, () => {
           map.getCanvas().style.cursor = "pointer";
         });
         map.on("mouseleave", LAYER_ID, () => {
-          map.getCanvas().style.cursor = "";
+          map.getCanvas().style.cursor = baseCursorRef.current;
         });
 
         /*
@@ -489,6 +552,7 @@ export default function ShelterMap() {
       disposed = true;
       if (timerRef.current) clearTimeout(timerRef.current);
       if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+      if (originUndoTimerRef.current) clearTimeout(originUndoTimerRef.current);
       abortRef.current?.abort();
       pinRef.current?.remove();
       pinRef.current = null;
@@ -515,11 +579,11 @@ export default function ShelterMap() {
   useEffect(() => {
     originRef.current = origin;
     loadRef.current?.();
-
-    // 地図を押せば置ける／寄れることをカーソルで見せる。
-    const canvas = mapRef.current?.getCanvas();
-    if (canvas) canvas.style.cursor = "crosshair";
   }, [origin]);
+
+  useEffect(() => {
+    viewRef.current = view;
+  }, [view]);
 
   /*
     起点のピン。**決め方に関係なく、起点があれば必ず出す。**
@@ -652,6 +716,21 @@ export default function ShelterMap() {
     undoTimerRef.current = setTimeout(() => setRemovedPlace(null), 12_000);
   }, []);
 
+  /** 押し間違いで移った起点を、見ていた面ごと戻す。 */
+  const undoOriginChange = useCallback(() => {
+    if (!originUndo) return;
+    if (originUndoTimerRef.current) clearTimeout(originUndoTimerRef.current);
+
+    setPickedOrigin(originUndo.from);
+    setView(originUndo.fromView);
+    setSelected(null);
+    setOriginUndo(null);
+
+    // 画面のほうも戻す。ズームは触らない（押した場所の見え方のまま帰す）。
+    const map = mapRef.current;
+    if (map) liftAboveSheet(map, originUndo.from);
+  }, [originUndo]);
+
   const undoRemove = useCallback(() => {
     setRemovedPlace((place) => {
       if (place) placesStore.savePlace(place);
@@ -718,6 +797,13 @@ export default function ShelterMap() {
 
   /** いまの起点が、すでに拠点として保存されているか。 */
   const savedHere = origin ? findPlaceAt(places, origin) : undefined;
+  /**
+   * 戻せる起点。**移した先から起点がさらに動いていたら、もう出さない。**
+   * 住所や現在地で決め直したあとに「元に戻す」が残っていると、
+   * 自分で選んだ操作のほうが取り消される。
+   */
+  const undoableOrigin =
+    originUndo && sameOrigin(origin, originUndo.to) ? originUndo.from : null;
 
   return (
     <>
@@ -732,7 +818,7 @@ export default function ShelterMap() {
         <div ref={containerRef} className="size-full" />
 
         {/*
-          地図に重ねるのは「地図の一部」だけにする。十字・ピン・現在地・件数がそれで、
+          地図に重ねるのは「地図の一部」だけにする。ピン・現在地の印・件数がそれで、
           操作ボタンは置かない（操作はパネルに集めた）。
         */}
         <div className="pointer-events-none absolute inset-x-0 top-0 flex flex-col items-start gap-2 p-3 md:pl-[21rem] lg:pl-[25rem]">
@@ -795,40 +881,43 @@ export default function ShelterMap() {
           />
         )}
 
-        {/* 送られた URL を開いただけで、この端末の拠点が消えるのは事故。必ず聞く。 */}
+        {/*
+          送られた URL を開いただけで、この端末の拠点が消えるのは事故。必ず聞く。
+          **答えるまで背後を触らせない**（Modal に閉じ方を渡さない）。
+          以前は背後が押せたので、3択を出したまま拠点を保存でき、その保存が
+          syncUrl でフラグメントを書き換えて、届いたほうの拠点を消していた。
+        */}
         {offered && (
-          <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center p-4">
-            <div className="pointer-events-auto w-full max-w-xs rounded-xl border border-zinc-200 bg-white p-4 shadow-xl">
-              <p className="text-sm font-semibold text-zinc-900">
-                この URL に{offered.length}つの場所が入っています
-              </p>
-              <p className="mt-1 text-xs leading-relaxed text-zinc-500">
-                {offered.map((p) => p.name).join("・")}
-                。この端末には別の拠点が保存されています。どちらを使いますか。
-              </p>
-              <button
-                type="button"
-                onClick={() => placesStore.acceptOffered(true)}
-                className="mt-3 w-full rounded-lg bg-zinc-900 px-3 py-2 text-sm font-medium text-white"
-              >
-                URL の場所に入れ替える
-              </button>
-              <button
-                type="button"
-                onClick={() => placesStore.acceptOffered(false)}
-                className="mt-2 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-700"
-              >
-                今回だけ見る（保存しない）
-              </button>
-              <button
-                type="button"
-                onClick={() => placesStore.keepCurrent()}
-                className="mt-2 w-full rounded-lg px-3 py-2 text-sm text-zinc-500"
-              >
-                この端末の拠点を使う
-              </button>
-            </div>
-          </div>
+          <Modal label="この URL に入っている場所を使いますか">
+            <p className="text-sm font-semibold text-zinc-900">
+              この URL に{offered.length}つの場所が入っています
+            </p>
+            <p className="mt-1 text-xs leading-relaxed text-zinc-500">
+              {offered.map((p) => p.name).join("・")}
+              。この端末には別の拠点が保存されています。どちらを使いますか。
+            </p>
+            <button
+              type="button"
+              onClick={() => placesStore.acceptOffered(true)}
+              className="mt-3 w-full rounded-lg bg-zinc-900 px-3 py-2 text-sm font-medium text-white"
+            >
+              URL の場所に入れ替える
+            </button>
+            <button
+              type="button"
+              onClick={() => placesStore.acceptOffered(false)}
+              className="mt-2 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-700"
+            >
+              今回だけ見る（保存しない）
+            </button>
+            <button
+              type="button"
+              onClick={() => placesStore.keepCurrent()}
+              className="mt-2 w-full rounded-lg px-3 py-2 text-sm text-zinc-600"
+            >
+              この端末の拠点を使う
+            </button>
+          </Modal>
         )}
 
         <ShelterPanel
@@ -849,16 +938,34 @@ export default function ShelterMap() {
           }}
           removedPlace={removedPlace}
           onUndoRemove={undoRemove}
+          undoableOrigin={undoableOrigin}
+          onUndoOrigin={undoOriginChange}
           onSavePlace={
             origin && !savedHere && places.length < MAX_PLACES
               ? () => setSaving(true)
               : undefined
+          }
+          // 保存ボタンが消える理由は2つあり、片方（上限）は言わないと分からない。
+          saveFull={
+            Boolean(origin) && !savedHere && places.length >= MAX_PLACES
           }
           onShare={() => setSharing(true)}
           onFocus={focus}
         />
       </div>
     </>
+  );
+}
+
+/** 同じ起点か。座標と、どう決めたかがそろっていれば同じものとして扱う。 */
+function sameOrigin(a: Origin | null, b: Origin | null): boolean {
+  return Boolean(
+    a &&
+      b &&
+      a.lat === b.lat &&
+      a.lng === b.lng &&
+      a.source === b.source &&
+      a.name === b.name,
   );
 }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { KINDS } from "@/lib/kinds";
 
@@ -21,6 +21,7 @@ const STORAGE_KEY = "wagaya-nigesaki:intro-dismissed";
 
 export default function IntroCard() {
   const id = useId();
+  const cardRef = useRef<HTMLDivElement>(null);
 
   // インラインスクリプトと同じ値を読む。どちらも localStorage を見るので、
   // React の初期状態と DOM が食い違わない。
@@ -44,6 +45,10 @@ export default function IntroCard() {
 
   useEffect(() => {
     if (dismissed) return;
+    // 出ているあいだはカードへ移す。2回目以降は dismissed が真のまま入るので、
+    // ここは走らない（＝黙って読み込んだ画面のフォーカスを奪わない）。
+    cardRef.current?.focus();
+
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") close();
     };
@@ -68,16 +73,24 @@ export default function IntroCard() {
       */}
       <div id={id} className={dismissed ? "hidden" : ""} suppressHydrationWarning>
         <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="このサイトについて"
-          className="fixed inset-0 z-30 flex items-end justify-center bg-zinc-900/20 p-3 sm:items-center"
+          /*
+            **あふれたら中でスクロールさせる。** 中身は小さい端末で画面の高さを
+            超える。items-end のままだと超えたぶんが上端（＝見出し）から切れて、
+            body が overflow-hidden なので追いかける手段が無かった。
+            flex の auto マージンなら、収まるときは寄って、あふれたら素直に流れる。
+          */
+          className="fixed inset-0 z-30 flex overflow-y-auto overscroll-contain bg-zinc-900/20 p-3"
           onClick={close}
         >
           {/* 背景を押すと閉じる。中身を押しても閉じない。 */}
           <div
+            ref={cardRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="このサイトについて"
+            tabIndex={-1}
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-md rounded-xl border border-zinc-200 bg-white p-4 shadow-xl"
+            className="mx-auto mt-auto w-full max-w-md rounded-xl border border-zinc-200 bg-white p-4 shadow-xl outline-none sm:m-auto"
           >
             <p className="text-[11px] font-medium tracking-wide text-zinc-500">
               この地図が答えること
@@ -92,7 +105,7 @@ export default function IntroCard() {
                   避難場所は、災害の種類ごとに使える・使えないが分かれています。
                 </span>
                 <br />
-                洪水では使えない場所があります。上のボタンで災害を選ぶと、
+                洪水では使えない場所があります。「災害で絞る」から災害を選ぶと、
                 その災害で使える場所だけが地図に残ります。
               </li>
               <li>

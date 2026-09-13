@@ -53,7 +53,7 @@ export default function ShelterDetailView({
                   className={`rounded border px-1.5 py-0.5 text-xs ${
                     on
                       ? "border-emerald-200 bg-emerald-50 text-emerald-900"
-                      : "border-zinc-200 bg-zinc-50 text-zinc-400"
+                      : "border-zinc-200 bg-zinc-50 text-zinc-500"
                   }`}
                 >
                   {on ? "○" : "×"} {disaster.label}
