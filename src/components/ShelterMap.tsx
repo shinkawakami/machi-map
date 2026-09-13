@@ -8,9 +8,16 @@ import type {
   Marker,
   StyleSpecification,
 } from "maplibre-gl";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 
 import RegionJump from "@/components/RegionJump";
+import SavePlaceDialog from "@/components/SavePlaceDialog";
 import ShelterFilterBar from "@/components/ShelterFilterBar";
 import ShelterPanel, {
   type Origin,
@@ -18,6 +25,8 @@ import ShelterPanel, {
 } from "@/components/ShelterPanel";
 import { kindOf } from "@/lib/kinds";
 import type { LatLng } from "@/lib/nearby";
+import { findPlaceAt, makePlace, MAX_PLACES, type Place } from "@/lib/places";
+import * as placesStore from "@/lib/places-store";
 import type { AreaBounds } from "@/lib/regions";
 import type { ShelterFilter, SheltersResult } from "@/lib/shelters";
 
@@ -135,6 +144,19 @@ export default function ShelterMap() {
   const [picking, setPicking] = useState(false);
   /** 避難場所を描かないズーム域にいるか。初期状態（全国）は必ずここから始まる。 */
   const [lowZoom, setLowZoom] = useState(true);
+
+  /**
+   * 保存した拠点。正本は URL、localStorage はその写し。
+   * どちらも React の外にあるので、ストアとして読む（lib/places-store.ts）。
+   */
+  const { places, offered } = useSyncExternalStore(
+    placesStore.subscribe,
+    placesStore.getSnapshot,
+    placesStore.getServerSnapshot,
+  );
+  /** 起点を拠点として保存する最中 */
+  const [saving, setSaving] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [selected, setSelected] = useState<LatLng | null>(null);
   const [locating, setLocating] = useState(false);
   const [locateError, setLocateError] = useState<string | null>(null);
@@ -516,6 +538,51 @@ export default function ShelterMap() {
     });
   }, []);
 
+  /** 保存した拠点を起点にする。座標は保存時に丸めてあるので、そのまま使う。 */
+  const selectPlace = useCallback((place: Place) => {
+    setPicking(false);
+    setOrigin({
+      lat: place.lat,
+      lng: place.lng,
+      source: "saved",
+      name: place.name,
+    });
+    setPanel({ state: "list" });
+    const map = mapRef.current;
+    if (map) liftAboveSheet(map, place, 14);
+  }, []);
+
+  /**
+   * いまの起点を拠点として保存する。
+   * 同じ名前と同じ地点は置き換える（「自宅」が2つある状態を作らない）。
+   */
+  const savePlace = useCallback(
+    (name: string) => {
+      setSaving(false);
+      if (!origin) return;
+      const place = makePlace(name, origin.lat, origin.lng);
+      if (!place) return;
+
+      placesStore.savePlace(place);
+      setOrigin({ ...place, source: "saved", name: place.name });
+    },
+    [origin],
+  );
+
+  /**
+   * 共有用の URL をコピーする。URL が正本なので、これがそのままバックアップになる。
+   * 中身に自宅の位置が入るため、貼る先の注意はボタンのすぐ横に出す。
+   */
+  const copyShareUrl = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  }, []);
+
   /** 場所を決めるモードに入る。下段は確定バーに譲るので、一覧は閉じる。 */
   const startPicking = useCallback(() => {
     setPicking(true);
@@ -574,8 +641,10 @@ export default function ShelterMap() {
     );
   }, []);
 
-  // 開いた直後（全国・起点なし）だけ出す案内。拡大するか起点が決まれば消える。
-  const showStartCard = origin === null && lowZoom && !picking;
+  // 起点が無いあいだの案内。避難場所も描いていないので、隠してしまうものは無い。
+  const showStartCard = origin === null && !picking;
+  /** いまの起点が、すでに拠点として保存されているか。 */
+  const savedHere = origin ? findPlaceAt(places, origin) : undefined;
 
   return (
     <>
@@ -592,24 +661,17 @@ export default function ShelterMap() {
 
         <div className="pointer-events-none absolute inset-x-0 top-0 flex flex-col items-start gap-2 p-3">
           {!showStartCard && !picking && (
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={locate}
-                disabled={locating}
-                className="pointer-events-auto rounded-full bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white shadow-sm disabled:opacity-60"
-              >
-                {locating ? "現在地を取得中…" : "現在地から探す"}
-              </button>
-              <button
-                type="button"
-                onClick={startPicking}
-                className="pointer-events-auto rounded-full px-3 py-1.5 text-xs font-medium text-white shadow-sm"
-                style={{ backgroundColor: PICKED_COLOR }}
-              >
-                {origin?.source === "picked" ? "場所を選び直す" : "地図から選ぶ"}
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setOrigin(null);
+                setPanel({ state: "closed" });
+                setSelected(null);
+              }}
+              className="pointer-events-auto rounded-full bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white shadow-sm"
+            >
+              場所を変える
+            </button>
           )}
           {locateError && <Chip>{locateError}</Chip>}
           {!picking && !showStartCard && <StatusChip status={status} />}
@@ -628,6 +690,45 @@ export default function ShelterMap() {
               <p className="mt-1 text-xs leading-relaxed text-zinc-500">
                 その場所から、災害の種類ごとに使える避難場所を近い順に出します。
               </p>
+
+              {/*
+                保存した拠点を先頭に置く。2回目以降はここを1回押せば終わる、
+                というのが生活拠点モデルの入口（.local/PLAN.md「利用シーンの整理」）。
+              */}
+              {places.length > 0 && (
+                <div className="mt-3 flex flex-col gap-1.5">
+                  {places.map((place) => (
+                    <div key={place.name} className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => selectPlace(place)}
+                        className="min-w-0 flex-1 rounded-lg border border-zinc-300 px-3 py-2 text-left text-sm font-medium text-zinc-900 transition-colors hover:bg-zinc-50"
+                      >
+                        {place.name}
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`${place.name}を削除`}
+                        onClick={() => placesStore.removePlace(place.name)}
+                        className="shrink-0 rounded px-2 py-1 text-xs text-zinc-400 hover:text-zinc-900"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={copyShareUrl}
+                    className="mt-0.5 self-start text-[11px] text-zinc-500 underline underline-offset-2 hover:text-zinc-900"
+                  >
+                    {copied ? "コピーしました" : "この拠点を家族に送る URL をコピー"}
+                  </button>
+                  <p className="text-[11px] leading-relaxed text-zinc-400">
+                    URL には保存した場所の位置が入ります。公開の場に貼らないでください。
+                  </p>
+                </div>
+              )}
+
               <button
                 type="button"
                 onClick={locate}
@@ -688,10 +789,59 @@ export default function ShelterMap() {
           </>
         )}
 
+        {saving && origin && (
+          <SavePlaceDialog
+            usedNames={places.map((p) => p.name)}
+            onSave={savePlace}
+            onCancel={() => setSaving(false)}
+          />
+        )}
+
+        {/* 送られた URL を開いただけで、この端末の拠点が消えるのは事故。必ず聞く。 */}
+        {offered && (
+          <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center p-4">
+            <div className="pointer-events-auto w-full max-w-xs rounded-xl border border-zinc-200 bg-white p-4 shadow-xl">
+              <p className="text-sm font-semibold text-zinc-900">
+                この URL に{offered.length}つの場所が入っています
+              </p>
+              <p className="mt-1 text-xs leading-relaxed text-zinc-500">
+                {offered.map((p) => p.name).join("・")}
+                。この端末には別の拠点が保存されています。どちらを使いますか。
+              </p>
+              <button
+                type="button"
+                onClick={() => placesStore.acceptOffered(true)}
+                className="mt-3 w-full rounded-lg bg-zinc-900 px-3 py-2 text-sm font-medium text-white"
+              >
+                URL の場所に入れ替える
+              </button>
+              <button
+                type="button"
+                onClick={() => placesStore.acceptOffered(false)}
+                className="mt-2 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-700"
+              >
+                今回だけ見る（保存しない）
+              </button>
+              <button
+                type="button"
+                onClick={() => placesStore.keepCurrent()}
+                className="mt-2 w-full rounded-lg px-3 py-2 text-sm text-zinc-500"
+              >
+                この端末の拠点を使う
+              </button>
+            </div>
+          </div>
+        )}
+
         <ShelterPanel
           panel={picking ? { state: "closed" } : panel}
           filter={filter}
-          origin={origin}
+          origin={savedHere ? { ...origin!, name: savedHere.name } : origin}
+          onSavePlace={
+            origin && !savedHere && places.length < MAX_PLACES
+              ? () => setSaving(true)
+              : undefined
+          }
           onClose={() => {
             setPanel({ state: "closed" });
             setSelected(null);

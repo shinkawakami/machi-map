@@ -22,14 +22,19 @@ export type PanelState =
   | { state: "detail"; id: string };
 
 /**
- * 近い順の起点。現在地ボタンで取ったもの（gps）と、地図で指したもの（picked）は
- * 意味が違う。「現在地から近い順」と言い切れるのは前者だけなので、
- * 座標だけでなく出どころも一緒に持ち回す。
+ * 近い順の起点。現在地ボタンで取ったもの（gps）・地図で指したもの（picked）・
+ * 保存した拠点（saved）は意味が違う。「現在地から近い順」と言い切れるのは
+ * 最初のものだけなので、座標だけでなく出どころも一緒に持ち回す。
  */
-export type Origin = LatLng & { source: "gps" | "picked" };
+export type Origin = LatLng & {
+  source: "gps" | "picked" | "saved";
+  /** 拠点として保存されているときの名前 */
+  name?: string;
+};
 
-/** 見出しに出す起点の呼び名。 */
+/** 見出しに出す起点の呼び名。拠点なら、その名前で呼ぶ。 */
 function originLabel(origin: Origin | null): string {
+  if (origin?.name) return origin.name;
   return origin?.source === "picked" ? "指した地点" : "現在地";
 }
 
@@ -37,6 +42,7 @@ export default function ShelterPanel({
   panel,
   filter,
   origin,
+  onSavePlace,
   onClose,
   onSelect,
   onBackToList,
@@ -46,6 +52,8 @@ export default function ShelterPanel({
   filter: ShelterFilter;
   /** 近い順の起点。null なら一覧は出せない */
   origin: Origin | null;
+  /** 起点をまだ拠点にしていないときだけ渡す */
+  onSavePlace?: () => void;
   onClose: () => void;
   onSelect: (item: NearbyItem) => void;
   onBackToList: () => void;
@@ -70,6 +78,19 @@ export default function ShelterPanel({
             ? `${originLabel(origin)}から近い順`
             : "施設の詳細"}
         </h2>
+        {/*
+          保存はここに置く。調べ終わった直後が、いちばん「残しておこう」と
+          思える場所なので（PLAN の壁4「見て知っても何も残らない」への入口）。
+        */}
+        {panel.state === "list" && onSavePlace && (
+          <button
+            type="button"
+            onClick={onSavePlace}
+            className="rounded-full border border-zinc-300 px-2.5 py-1 text-[11px] font-medium text-zinc-700 transition-colors hover:bg-zinc-50"
+          >
+            ここを拠点に保存
+          </button>
+        )}
         <button
           type="button"
           onClick={onClose}
