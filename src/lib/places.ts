@@ -94,7 +94,7 @@ export function findPlaceAt(
 
 // --- 以下はブラウザでのみ呼ぶ ---
 
-const STORAGE_KEY = "nigedoko:places";
+const STORAGE_KEY = "wagaya-nigesaki:places";
 
 /** キャッシュを読む。消えていること・読めないことを前提に、失敗は空で返す。 */
 export function readCachedPlaces(): Place[] {

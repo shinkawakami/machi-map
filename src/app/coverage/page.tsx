@@ -7,7 +7,7 @@ import { formatCount, formatDate } from "@/lib/format";
 import { KINDS } from "@/lib/kinds";
 
 export const metadata: Metadata = {
-  title: "データの公開状況 | にげどこ",
+  title: "データの公開状況 | わが家の逃げ先",
   description:
     "この地図に出ている避難場所は、市町村が登録し公開に同意したものに限られます。全国 1,700 余りの市町村について、指定緊急避難場所・指定避難所それぞれの公開状況を出しています。",
 };

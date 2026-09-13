@@ -32,7 +32,7 @@ export default function PrintSheet({
       <header className="flex items-start gap-4 border-b border-zinc-300 pb-3">
         <div className="min-w-0 flex-1">
           <h1 className="text-lg font-bold text-zinc-900">
-            わが家の逃げ先（にげどこ）
+            わが家の逃げ先
           </h1>
           <p className="mt-1 text-xs leading-relaxed text-zinc-600">
             避難場所は<strong>災害の種類ごとに使える・使えないが分かれます</strong>。

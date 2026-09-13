@@ -17,7 +17,7 @@ import { KINDS } from "@/lib/kinds";
  * 描画前に走るインラインスクリプトで隠しておく（Next.js の
  * 「Preventing flash before hydration」と同じ手）。
  */
-const STORAGE_KEY = "nigedoko:intro-dismissed";
+const STORAGE_KEY = "wagaya-nigesaki:intro-dismissed";
 
 export default function IntroCard() {
   const id = useId();

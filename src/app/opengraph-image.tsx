@@ -9,16 +9,16 @@ import { KINDS } from "@/lib/kinds";
  * 件数は「約20万件」と丸めてある。月次の取り込みで実数は動くが、この画像は
  * ビルド時に固定されるので、更新のたびに嘘になる数字を焼き込まない。
  */
-export const alt = "にげどこ｜災害の種類で、逃げこめる場所は変わります";
+export const alt = "わが家の逃げ先｜災害の種類で、逃げこめる場所は変わります";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
-const BRAND = "にげどこ";
+const BRAND = "わが家の逃げ先";
 const LINE1 = "災害の種類で、";
 const LINE2 = "逃げこめる場所は変わります";
 const SUB =
-  "洪水では使えない避難場所があります。全国 約20万件から、その災害で使える場所だけを地図に。";
-const FOOT = "nigedoko.vercel.app ／ 出典：国土地理院";
+  "洪水では使えない避難場所があります。自宅や職場から、8種類の災害それぞれの最寄りを1枚に。";
+const FOOT = "wagaya-nigesaki.vercel.app ／ 出典：国土地理院";
 
 /**
  * Noto Sans JP を Google Fonts から取る。`text=` を付けると、使う文字だけの

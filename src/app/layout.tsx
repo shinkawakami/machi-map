@@ -7,21 +7,21 @@ const geistSans = Geist({
   subsets: ["latin"],
 });
 
-const TITLE = "にげどこ | 災害の種類で選ぶ避難場所の地図";
+const TITLE = "わが家の逃げ先 | 拠点ごとに、災害の種類で変わる避難場所";
 const DESCRIPTION =
-  "全国の指定緊急避難場所・指定避難所を地図で見られます。避難場所は災害の種類ごとに使える・使えないが分かれています。国土地理院の公開データをもとに作成。";
+  "自宅・職場・実家などの拠点ごとに、8種類の災害それぞれで使える最寄りの避難場所を出します。避難場所は災害の種類ごとに使える・使えないが分かれています。ログイン不要。国土地理院の公開データをもとに作成。";
 
 export const metadata: Metadata = {
   // opengraph-image を絶対 URL に組み立てるために要る。無いと og:image が
   // ビルド環境（localhost や VERCEL_URL）に引きずられる。
-  metadataBase: new URL("https://nigedoko.vercel.app"),
+  metadataBase: new URL("https://wagaya-nigesaki.vercel.app"),
   title: TITLE,
   description: DESCRIPTION,
   openGraph: {
     title: TITLE,
     description: DESCRIPTION,
     url: "/",
-    siteName: "にげどこ",
+    siteName: "わが家の逃げ先",
     locale: "ja_JP",
     type: "website",
   },

@@ -599,7 +599,7 @@ export default function ShelterMap() {
 
   /**
    * 現在地を取る。HTTPS でないと（localhost を除いて）ブラウザが拒否するので、
-   * 本番の https://nigedoko.vercel.app/ が前提。
+   * 本番の https://wagaya-nigesaki.vercel.app/ が前提。
    */
   const locate = useCallback(() => {
     if (!navigator.geolocation) {
