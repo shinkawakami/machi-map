@@ -131,6 +131,13 @@ async function main() {
       await prisma.machiaza.createMany({ data: records.slice(i, i + CHUNK) });
     }
 
+    /*
+      **検算を通してから SUCCESS にする。** 記録が「成功」と言えるのは、
+      成功の条件（検算）を満たしたあとだけ。逆にすると、SUCCESS を書いた直後に
+      落ちた取り込みが、成功として残る。
+    */
+    await verify(records);
+
     await prisma.importRun.update({
       where: { id: run.id },
       data: {
@@ -139,8 +146,6 @@ async function main() {
         rowCount: records.length,
       },
     });
-
-    await verify(records);
   } catch (e) {
     await prisma.importRun.update({
       where: { id: run.id },

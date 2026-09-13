@@ -303,12 +303,19 @@ async function main() {
     await insertShelters(emergency);
     await insertShelters(shelters);
 
+    /*
+      **検算を通してから SUCCESS にする。** ここを逆にすると、記録が嘘をつく。
+      failRuns は `status: "RUNNING"` の行だけを FAILED に倒すので、先に
+      finishRun を呼んでしまうと、検算が落ちても**どの行にも当たらず**、
+      3件とも SUCCESS のまま例外だけが飛ぶ。
+      countUpMunicipalities も同じ理由でこちら側に置く（ここで落ちても同じことが起きる）。
+    */
+    await countUpMunicipalities();
+    await verify();
+
     await finishRun(runs[0], municipalities.length);
     await finishRun(runs[1], emergency.length);
     await finishRun(runs[2], shelters.length);
-
-    await countUpMunicipalities();
-    await verify();
   } catch (e) {
     await failRuns(runs, e);
     throw e;
