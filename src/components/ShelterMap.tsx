@@ -24,6 +24,7 @@ import ShelterPanel, {
   type Origin,
   type PanelView,
 } from "@/components/ShelterPanel";
+import { snapBbox, snapCells } from "@/lib/grid";
 import { kindOf } from "@/lib/kinds";
 import type { LatLng } from "@/lib/nearby";
 import { findPlaceAt, makePlace, MAX_PLACES, type Place } from "@/lib/places";
@@ -319,15 +320,25 @@ export default function ShelterMap() {
 
       const load = async () => {
         const bounds = map.getBounds();
-        const bbox = [
-          bounds.getWest(),
-          bounds.getSouth(),
-          bounds.getEast(),
-          bounds.getNorth(),
-        ]
+
+        /*
+          **見えている範囲そのままでは投げない。** 格子に吸着させてから投げる。
+          生のビューポートを載せると 1px パンするだけで別の URL になり、
+          CDN にもブラウザのキャッシュにも当たらない（lib/grid.ts）。
+          吸着させると、格子1つぶんの中で動いているあいだは URL が変わらず、
+          そもそも取りに行かなくなる（同じ URL なので max-age の 5 分は
+          ブラウザが返す）。cells も画面幅がそのまま出ないよう2の冪に寄せる。
+        */
+        const snapped = snapBbox({
+          west: bounds.getWest(),
+          south: bounds.getSouth(),
+          east: bounds.getEast(),
+          north: bounds.getNorth(),
+        });
+        const bbox = [snapped.west, snapped.south, snapped.east, snapped.north]
           .map((n) => n.toFixed(5))
           .join(",");
-        const cells = Math.round(
+        const cells = snapCells(
           map.getContainer().clientWidth / CLUSTER_CELL_PX,
         );
         const { kinds, disaster } = filterRef.current;
@@ -1232,8 +1243,15 @@ function StatusChip({ status }: { status: Status }) {
 
   const { result } = status;
   return (
+    /*
+      **「この範囲に」とは言えなくなった。** 問い合わせる矩形は格子に吸着させて
+      あり、画面より少し広い（lib/grid.ts の snapBbox）。数えているのもその矩形の
+      中なので、見えている範囲ぴったりの数ではない。数字を画面に合わせて数え直す
+      手もあるが、クラスタで返ってきたときは手元に点が無いので数えられない。
+      **言い方のほうを実際に合わせる。**
+    */
     <Chip>
-      この範囲に <strong className="font-semibold">
+      このあたりに <strong className="font-semibold">
         {result.total.toLocaleString("ja-JP")}
       </strong> 件
     </Chip>

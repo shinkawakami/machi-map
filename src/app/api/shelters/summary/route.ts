@@ -1,3 +1,4 @@
+import { cachedJson, errorJson } from "@/lib/http-cache";
 import { parseLatLng } from "@/lib/nearby";
 import { fetchPlaceSummary } from "@/lib/place-summary";
 
@@ -10,11 +11,8 @@ import { fetchPlaceSummary } from "@/lib/place-summary";
 export async function GET(request: Request) {
   const center = parseLatLng(new URL(request.url).searchParams);
   if (!center) {
-    return Response.json(
-      { error: "lat と lng を数値で指定してください" },
-      { status: 400 },
-    );
+    return errorJson("lat と lng を数値で指定してください", 400);
   }
 
-  return Response.json(await fetchPlaceSummary(center));
+  return cachedJson(await fetchPlaceSummary(center));
 }

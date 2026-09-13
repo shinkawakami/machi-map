@@ -6,6 +6,7 @@ import AddressSearch from "@/components/AddressSearch";
 import ShelterDetailView from "@/components/ShelterDetailView";
 import ShelterFilterBar from "@/components/ShelterFilterBar";
 import { disasterLabel } from "@/lib/disasters";
+import { roundCoord } from "@/lib/grid";
 import { formatDistance } from "@/lib/format";
 import type { GeocodeHit } from "@/lib/geocode";
 import { kindOf } from "@/lib/kinds";
@@ -452,8 +453,10 @@ function SummaryTable({
 
     (async () => {
       try {
+        // 座標は丸めてから投げる。同じ拠点・同じ現在地が同じ URL に落ちて、
+        // CDN とブラウザのキャッシュに乗る（lib/grid.ts）。
         const res = await fetch(
-          `/api/shelters/summary?lat=${origin.lat}&lng=${origin.lng}`,
+          `/api/shelters/summary?lat=${roundCoord(origin.lat)}&lng=${roundCoord(origin.lng)}`,
           { signal: controller.signal },
         );
         if (!res.ok) throw new Error(`API が ${res.status} を返しました`);
@@ -605,8 +608,9 @@ function NearbyList({
     const controller = new AbortController();
 
     const query = new URLSearchParams({
-      lat: String(origin.lat),
-      lng: String(origin.lng),
+      // 表と同じく丸めてから投げる（lib/grid.ts）。11m の差は最寄りの順位を変えない。
+      lat: String(roundCoord(origin.lat)),
+      lng: String(roundCoord(origin.lng)),
       kinds: filter.kinds.join(","),
     });
     if (filter.disaster) query.set("disaster", filter.disaster);

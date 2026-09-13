@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import QrCode from "@/components/QrCode";
 import { disasterLabel } from "@/lib/disasters";
 import { formatDistance } from "@/lib/format";
+import { roundCoord } from "@/lib/grid";
 import { kindOf } from "@/lib/kinds";
 import type { NearbyItem } from "@/lib/nearby";
 import type { PlaceSummary } from "@/lib/place-summary";
@@ -77,8 +78,9 @@ function PlaceTable({ place }: { place: Place }) {
 
     (async () => {
       try {
+        // 画面で見たときと同じ URL になるよう、同じ丸めを通す（lib/grid.ts）。
         const res = await fetch(
-          `/api/shelters/summary?lat=${place.lat}&lng=${place.lng}`,
+          `/api/shelters/summary?lat=${roundCoord(place.lat)}&lng=${roundCoord(place.lng)}`,
           { signal: controller.signal },
         );
         if (!res.ok) throw new Error(`API が ${res.status} を返しました`);

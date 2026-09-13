@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { normalizeAddress } from "@/lib/address";
 import type { GeocodeHit } from "@/lib/geocode";
 
 /**
@@ -35,8 +36,11 @@ export default function AddressSearch({
     // 打っている途中で毎文字投げない。止まってから引く。
     const timer = setTimeout(async () => {
       try {
+        // 正規化してから投げる。サーバー側でも同じ関数を通すので結果は変わらず、
+        // 表記ゆれ（全角半角・ヶとケ・区切りの空白）のぶんだけ URL が寄って
+        // キャッシュに当たりやすくなる。
         const res = await fetch(
-          `/api/geocode?q=${encodeURIComponent(key)}`,
+          `/api/geocode?q=${encodeURIComponent(normalizeAddress(key))}`,
           { signal: controller.signal },
         );
         if (!res.ok) throw new Error(String(res.status));

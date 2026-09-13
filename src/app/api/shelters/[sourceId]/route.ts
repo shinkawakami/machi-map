@@ -1,3 +1,4 @@
+import { cachedJson, errorJson } from "@/lib/http-cache";
 import { fetchDetail } from "@/lib/shelter-detail";
 
 /**
@@ -7,6 +8,9 @@ import { fetchDetail } from "@/lib/shelter-detail";
  * 押されたときにここで残りを取る。
  *
  * 識別子は共通ID（sourceId）。Shelter.id は取り込みのたびに変わるので外には出さない。
+ *
+ * **もともとキャッシュに最も向いた形。** 14桁の共通IDは有限（約20万）で、
+ * 丸める必要がなく、取り込みの間は中身も変わらない。
  */
 export async function GET(
   _request: Request,
@@ -16,8 +20,8 @@ export async function GET(
 
   const detail = await fetchDetail(sourceId);
   if (!detail) {
-    return Response.json({ error: "見つかりませんでした" }, { status: 404 });
+    return errorJson("見つかりませんでした", 404);
   }
 
-  return Response.json(detail);
+  return cachedJson(detail);
 }

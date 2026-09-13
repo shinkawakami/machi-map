@@ -2,6 +2,7 @@ import { Prisma } from "@/generated/prisma/client";
 import type { ShelterKind } from "@/generated/prisma/enums";
 import { prisma } from "@/lib/db";
 import { type DisasterKey, isDisasterKey } from "@/lib/disasters";
+import { type Bbox, cellSizeDeg, clamp, snapCells } from "@/lib/grid";
 
 /**
  * 1回のレスポンスで個々の点を返す上限。
@@ -24,12 +25,8 @@ const MAX_CLUSTERS = 5000;
 
 const ALL_KINDS: readonly ShelterKind[] = ["EMERGENCY", "SHELTER"];
 
-export type Bbox = {
-  west: number;
-  south: number;
-  east: number;
-  north: number;
-};
+/** 格子まわりの計算は lib/grid.ts にある（クライアントからも読むため） */
+export type { Bbox };
 
 /**
  * 絞り込みの条件。
@@ -91,11 +88,15 @@ export function parseBbox(raw: string | null): Bbox | null {
   return { west, south, east, north };
 }
 
-/** 横方向をいくつのセルに割るか。クライアントの画面幅から決まるので受け取る。 */
+/**
+ * 横方向をいくつのセルに割るか。クライアントの画面幅から決まるので受け取る。
+ *
+ * 受け取った値は2の冪に寄せる。クライアントは URL がキャッシュに乗るよう
+ * snapCells を通してから送ってくるので、手で組んだ URL でも同じ結果になるように
+ * こちらでも同じ丸めをかける。
+ */
 export function parseCells(raw: string | null): number {
-  const n = Number(raw);
-  if (!Number.isFinite(n)) return 16;
-  return Math.round(clamp(n, 4, 32));
+  return snapCells(Number(raw));
 }
 
 /**
@@ -113,22 +114,6 @@ export function parseFilter(params: URLSearchParams): ShelterFilter {
     kinds: kinds.length > 0 ? kinds : [...ALL_KINDS],
     disaster: disaster && isDisasterKey(disaster) ? disaster : null,
   };
-}
-
-/**
- * グリッドのセルの大きさ。`360 / 2^k` のはしごに丸める。
- *
- * bbox の幅からそのまま割ると、パンのたびに幅の丸め誤差でセル境界が動き、
- * クラスタの点が小刻みに飛ぶ。2の冪に丸めておけば境界が地球に固定され、
- * 同じズームである限りパンしても位置が変わらない。
- *
- * 緯度側も同じ度数を使う。メルカトルなので画面上は縦長のセルになるが
- * （日本の緯度で約1.24倍）、クラスタの点は構成要素の平均位置に置くので実害がない。
- */
-export function cellSizeDeg(bbox: Bbox, cells: number): number {
-  const target = (bbox.east - bbox.west) / cells;
-  const k = Math.round(Math.log2(360 / target));
-  return 360 / 2 ** clamp(k, 0, 20);
 }
 
 /**
@@ -338,10 +323,6 @@ export function sqlWhereFor(bbox: Bbox, filter: ShelterFilter): Prisma.Sql {
   }
 
   return Prisma.join(conditions, " AND ");
-}
-
-function clamp(n: number, min: number, max: number): number {
-  return Math.min(Math.max(n, min), max);
 }
 
 /** 小数5桁 ≒ 1m。これ以上の桁は転送量になるだけで地図では見えない。 */
