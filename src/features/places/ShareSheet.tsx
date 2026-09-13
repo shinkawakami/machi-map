@@ -64,22 +64,37 @@ export default function ShareSheet({
       </p>
 
       {choosable ? (
-        <ul className="mt-2">
-          {places.map((place) => (
-            <li key={place.name}>
-              {/* 行ごと押せるようにする。指で押し分けられる高さを確保する。 */}
-              <label className="flex cursor-pointer items-center gap-2 py-1.5 text-sm text-zinc-800">
-                <input
-                  type="checkbox"
-                  checked={sending.includes(place.name)}
-                  onChange={() => toggle(place.name)}
-                  className="size-5 accent-zinc-900"
-                />
+        /*
+          **縦に積まない。** 拠点は最大6件だが、名前は「自宅」「職場」のように短い。
+          1行に1件ずつ並べると、名前の長さに関係なく6行ぶんの高さを使い、
+          残りの中身（QR・コピー・印刷・注意書き）を押し出してダイアログが
+          スクロールに落ちる。折り返しのチップなら、同じ6件が1〜2行に収まる。
+
+          **このアプリで「複数選ぶ」はすでにこの形。** 拠点の名前を決めるときの
+          プリセット（SavePlaceDialog）も、災害種別の絞り込み（ShelterFilterBar）も
+          折り返しのチップで、選んだものは黒く塗る。ここだけチェックボックスを
+          縦に並べていた。
+        */
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {places.map((place) => {
+            const on = sending.includes(place.name);
+            return (
+              <button
+                key={place.name}
+                type="button"
+                aria-pressed={on}
+                onClick={() => toggle(place.name)}
+                className={`min-h-9 rounded-full border px-3 text-sm transition-colors ${
+                  on
+                    ? "border-zinc-900 bg-zinc-900 font-medium text-white"
+                    : "border-zinc-300 text-zinc-700 hover:bg-zinc-50"
+                }`}
+              >
                 {place.name}
-              </label>
-            </li>
-          ))}
-        </ul>
+              </button>
+            );
+          })}
+        </div>
       ) : (
         <p className="mt-1 text-xs leading-relaxed text-zinc-500">
           {places.map((p) => p.name).join("・")}
