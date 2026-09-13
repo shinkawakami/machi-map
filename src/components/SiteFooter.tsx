@@ -26,6 +26,16 @@ export default function SiteFooter() {
         >
           地理院タイル
         </a>
+        ／住所検索：
+        <a
+          className="underline underline-offset-2 hover:text-zinc-800"
+          href="https://nlftp.mlit.go.jp/isj/"
+          target="_blank"
+          rel="noreferrer"
+        >
+          位置参照情報ダウンロードサービス
+        </a>
+        （国土交通省）をもとに作成
       </p>
       <p>
         市町村が登録し公開に同意したものに限られ、最新でない場合や未掲載の場合があります。

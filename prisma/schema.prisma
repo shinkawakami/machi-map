@@ -113,6 +113,44 @@ model Shelter {
   @@index([kind])
 }
 
+/// 大字・町丁目の代表点。国土交通省「位置参照情報（大字・町丁目レベル）」を取り込む。
+///
+/// 住所から拠点を置くために持つ。実行時に外部のジオコーディング API を叩かないための
+/// 自前の索引で、根拠は .local/PLAN.md「住所検索のジオコーディング」を参照。
+/// 番地までは持たない。答える問いは「近くのどこへ逃げるか」で、その先は近い順が
+/// 半径2kmから広げるため、町丁目の代表点と番地の差は最寄りの順位をほとんど変えない。
+model Machiaza {
+  id String @id @default(cuid())
+
+  /// 大字町丁目コード（12桁）。全国で5件だけ重複があるので一意にはしない
+  sourceCode String @db.Char(12)
+
+  prefecture String
+  /// 市区町村名。政令市は行政区の単位で入る（避難場所側のマスタより細かい）
+  municipality     String
+  /// 市区町村コード5桁。上と同じ理由で Municipality とは 1:1 にならないため、関連は張らない
+  municipalityCode String @db.Char(5)
+  /// 大字町丁目名（例: 内幸町一丁目）
+  name             String
+
+  /// 検索用に正規化した「都道府県+市区町村+大字町丁目」。前方一致で引く
+  searchKey String
+  /// 同じく「市区町村+大字町丁目」。人は都道府県を省いて書くほうが多い
+  cityKey   String
+  /// 同じく大字町丁目名だけ。町名から直接引けるようにする
+  nameKey   String
+
+  lat Float
+  lng Float
+
+  importedAt DateTime @default(now())
+
+  @@index([searchKey])
+  @@index([cityKey])
+  @@index([nameKey])
+  @@index([municipalityCode])
+}
+
 /// データ更新でおかしくなったときに原因を追うための最低限の記録。
 model ImportRun {
   id       String @id @default(cuid())

@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "postinstall": "prisma generate && node scripts/copy-maplibre-worker.mjs",
-    "import:gsi": "tsx scripts/import-gsi.ts"
+    "import:gsi": "tsx scripts/import-gsi.ts",
+    "import:isj": "tsx scripts/import-isj.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.0",
@@ -30,6 +31,7 @@
     "dotenv": "^17.4.2",
     "eslint": "^9",
     "eslint-config-next": "16.3.4",
+    "fflate": "^0.8.3",
     "prisma": "^7.10.0",
     "tailwindcss": "^4",
     "tsx": "^4.23.13",

@@ -16,6 +16,7 @@ import {
   useSyncExternalStore,
 } from "react";
 
+import AddressSearch from "@/components/AddressSearch";
 import RegionJump from "@/components/RegionJump";
 import SavePlaceDialog from "@/components/SavePlaceDialog";
 import ShareSheet from "@/components/ShareSheet";
@@ -573,6 +574,15 @@ export default function ShelterMap() {
     [origin],
   );
 
+  /** 住所の候補や拠点など、決まった1点に寄る。 */
+  const jumpToPoint = useCallback((point: LatLng, zoom = 15) => {
+    mapRef.current?.easeTo({
+      center: [point.lng, point.lat],
+      zoom,
+      duration: 600,
+    });
+  }, []);
+
   /** 場所を決めるモードに入る。下段は確定バーに譲るので、一覧は閉じる。 */
   const startPicking = useCallback(() => {
     setPicking(true);
@@ -750,8 +760,14 @@ export default function ShelterMap() {
                 調べたい場所を、中央の十字に合わせてください
                 {lowZoom && "（まだ広すぎます。下の選択か拡大で寄せてください）"}
               </p>
-              {/* 全国から指で拡大していくのは手間が大きいので、名前から寄れる道を出す。 */}
+              {/*
+                全国から指で拡大していくのは手間が大きいので、名前から寄れる道を2つ出す。
+                住所を知っているときは上、地名しか分からないときは下。
+              */}
               <div className="mt-2">
+                <AddressSearch onPick={(hit) => jumpToPoint(hit)} />
+              </div>
+              <div className="mt-1.5">
                 <RegionJump onJump={jumpTo} />
               </div>
               <div className="mt-2 flex items-center gap-2">

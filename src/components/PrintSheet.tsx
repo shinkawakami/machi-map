@@ -59,7 +59,8 @@ export default function PrintSheet({
       )}
 
       <footer className="mt-6 border-t border-zinc-300 pt-2 text-[10px] leading-relaxed text-zinc-500">
-        出典：国土地理院ウェブサイト（指定緊急避難場所データ・指定避難所データ）をもとに作成。
+        出典：国土地理院ウェブサイト（指定緊急避難場所データ・指定避難所データ）、
+        「位置参照情報ダウンロードサービス」（国土交通省）をもとに作成。
         データは市町村が登録し公開に同意したものに限られ、最新でない場合や未掲載の場合があります。
         距離は直線距離で、実際の道のりではありません。
       </footer>
