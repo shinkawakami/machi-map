@@ -1,5 +1,7 @@
 # わが家の逃げ先
 
+[![CI](https://github.com/shinkawakami/machi-map/actions/workflows/ci.yml/badge.svg)](https://github.com/shinkawakami/machi-map/actions/workflows/ci.yml)
+
 自宅・職場・実家といった**拠点ごと**に、**8種類の災害それぞれで使える最寄りの避難場所**を出す地図。
 
 **https://wagaya-nigesaki.vercel.app/**
@@ -238,6 +240,17 @@ npm run import:isj            # 住所検索用の町字データ。約30秒
 npm run dev
 ```
 
+確認は DB なしで走ります。CI（GitHub Actions）もこの4つを回しています。
+
+```bash
+npm run lint
+npm run typecheck             # next typegen（ルートの型を作る）→ tsc --noEmit
+npm test                      # src/lib の純粋関数。105ケース・0.3秒
+npm run build                 # DATABASE_URL 不要（避難場所を出すページはすべて動的）
+```
+
+- テストの対象は `src/lib` だけ。DB もブラウザも要らないものに絞っています
+  （理由は [ARCHITECTURE.md](./ARCHITECTURE.md) の層の説明と `vitest.config.mts`）
 - Prisma 7 の設定ファイルは **`prisma7.config.ts`**（`prisma.config.ts` ではありません）
 - 生成物 `src/generated/prisma` は git に入れず、`postinstall` で再生成します
 - MapLibre GL JS 6 のワーカーはバンドラの静的解析に引っかからないため、

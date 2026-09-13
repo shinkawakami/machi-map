@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# 同じブランチで新しい push があったら、走っている古いものは止める。
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          # 手元の開発環境と合わせる。@types/node と vitest も 24 以上を前提にしている。
+          node-version: 24
+          cache: npm
+
+      # postinstall で `prisma generate` が走る（src/generated/prisma は git に入れていない）。
+      # スキーマを読むだけなので、DB への接続は要らない。
+      - run: npm ci
+
+      - run: npm run lint
+
+      # **`tsc --noEmit` を直接は叩かない。** `LayoutProps` や `RouteContext` は
+      # Next が `.next/types` に生成する型で、まっさらな checkout には存在しない。
+      # `next typegen` で先に作る（ビルドを1本まるごと走らせるより速い）。
+      - run: npm run typecheck
+
+      - run: npm test
+
+      # `next build` まで通す。tsc だけでは拾えないもの（ルートの型・
+      # メタデータ・opengraph-image の生成）がここで落ちる。
+      #
+      # **DATABASE_URL は渡さない。** 避難場所を出すページはすべて動的なので、
+      # ビルド時に DB へ行かない。繋がらない状態でビルドが通ること自体が、
+      # 「ビルドが Neon の状態に依存しない」ことの確認になる。
+      - run: npm run build
