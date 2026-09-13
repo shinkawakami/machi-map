@@ -333,7 +333,6 @@ export default function ShelterMap() {
         const controller = new AbortController();
         abortRef.current = controller;
         setStatus({ state: "loading" });
-        pointsShownRef.current = false;
 
         try {
           const res = await fetch(`/api/shelters?${query}`, {
@@ -348,6 +347,15 @@ export default function ShelterMap() {
             押せば置ける状態なのに避難場所が見えない、という食い違いを無くす。
             点が出るかどうかはズームではなく件数で決まる（同じ z12 でも都心と
             地方で違う）ので、ズームの数字ではなく実際の結果で判定する。
+
+            **読み込みを始める時点では倒さない。** ここは「いま地図に描かれているもの」を
+            表す旗で、「いま取りにいっているもの」ではない。点を消すのは下の setData
+            なので、応答が返るまで画面には前の点が出たままになる。
+            投げる前に false にしていたころは、その待ち時間のあいだ
+            **見えている点を押しても置けず、代わりに拡大していた**。
+            moveend のたびに読み直すので、パンや拡大の直後は毎回この窓に入る。
+            ローカルでは 15〜35ms で閉じるが、本番は Vercel → Neon（Singapore）の
+            往復ぶん開くため、そちらでだけ再現した。
           */
           pointsShownRef.current = result.mode === "points";
           // 押せば置ける状態なら crosshair、寄るだけなら zoom-in。
