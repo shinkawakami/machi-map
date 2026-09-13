@@ -33,7 +33,7 @@ const MAX_LIMIT = 50;
  * 256km で打ち切るのは、そこまで遠い避難場所を案内しても意味がないのと、
  * 打ち切りを「この付近にはこれしか無い」として UI で言えるようにするため。
  */
-const RADII_M = [2000, 4000, 8000, 16000, 32000, 64000, 128000, 256000];
+export const RADII_M = [2000, 4000, 8000, 16000, 32000, 64000, 128000, 256000];
 
 /** 緯度1度あたりの距離（m）。経度は緯度によって縮むので後で補正する。 */
 const DEG_LAT_M = 111_320;
@@ -118,7 +118,7 @@ async function queryWithin(
 }
 
 /** 球面上の距離（ハバサイン）。PostGIS を使わないので式で書く。 */
-function sqlDistanceM(center: LatLng): Prisma.Sql {
+export function sqlDistanceM(center: LatLng): Prisma.Sql {
   return Prisma.sql`
     ${EARTH_RADIUS_M} * 2 * asin(sqrt(
       power(sin(radians(lat - ${center.lat}) / 2), 2)
@@ -128,7 +128,7 @@ function sqlDistanceM(center: LatLng): Prisma.Sql {
 }
 
 /** 円を囲む矩形。索引（lat, lng）が効くのはこの部分だけ。 */
-function bboxAround(center: LatLng, radiusM: number): Bbox {
+export function bboxAround(center: LatLng, radiusM: number): Bbox {
   const dLat = radiusM / DEG_LAT_M;
 
   // 経度方向の補正は、中心ではなく矩形の**端**の緯度で取る。中心の緯度で割ると

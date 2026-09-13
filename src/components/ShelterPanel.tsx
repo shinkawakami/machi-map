@@ -7,6 +7,7 @@ import { disasterLabel } from "@/lib/disasters";
 import { formatDistance } from "@/lib/format";
 import { kindOf } from "@/lib/kinds";
 import type { LatLng, NearbyItem, NearbyResult } from "@/lib/nearby";
+import type { PlaceSummary } from "@/lib/place-summary";
 import type { ShelterDetail } from "@/lib/shelter-detail";
 import type { ShelterFilter } from "@/lib/shelters";
 
@@ -18,8 +19,10 @@ import type { ShelterFilter } from "@/lib/shelters";
  */
 export type PanelState =
   | { state: "closed" }
+  /** 災害8種ぶんの最寄りをまとめた表。拠点の「持ち帰れるもの」 */
+  | { state: "summary" }
   | { state: "list" }
-  | { state: "detail"; id: string };
+  | { state: "detail"; id: string; from: "summary" | "list" };
 
 /**
  * 近い順の起点。現在地ボタンで取ったもの（gps）・地図で指したもの（picked）・
@@ -45,7 +48,7 @@ export default function ShelterPanel({
   onSavePlace,
   onClose,
   onSelect,
-  onBackToList,
+  onShow,
   onFocus,
 }: {
   panel: PanelState;
@@ -56,7 +59,8 @@ export default function ShelterPanel({
   onSavePlace?: () => void;
   onClose: () => void;
   onSelect: (item: NearbyItem) => void;
-  onBackToList: () => void;
+  /** 表・一覧の切り替えと、詳細からの戻り */
+  onShow: (state: "summary" | "list") => void;
   onFocus: (target: LatLng) => void;
 }) {
   if (panel.state === "closed") return null;
@@ -64,31 +68,53 @@ export default function ShelterPanel({
   return (
     <div className="pointer-events-auto absolute inset-x-0 bottom-0 flex max-h-[60%] flex-col rounded-t-xl border-t border-zinc-200 bg-white shadow-[0_-4px_16px_rgba(0,0,0,0.08)]">
       <div className="flex shrink-0 items-center gap-2 border-b border-zinc-100 px-3 py-2">
-        {panel.state === "detail" && origin && (
-          <button
-            type="button"
-            onClick={onBackToList}
-            className="rounded px-1 text-xs text-zinc-500 hover:text-zinc-900"
-          >
-            ← 一覧
-          </button>
+        {panel.state === "detail" ? (
+          <>
+            <button
+              type="button"
+              onClick={() => onShow(panel.from)}
+              className="rounded px-1 text-xs text-zinc-500 hover:text-zinc-900"
+            >
+              ← {panel.from === "summary" ? "表" : "一覧"}
+            </button>
+            <h2 className="text-xs font-semibold text-zinc-700">施設の詳細</h2>
+          </>
+        ) : (
+          <>
+            {/*
+              2つの見方を並べて持つ。災害別の表がこのアプリの答えで、
+              近い順はその裏取り。どちらかに片寄せると片方が行き止まりになる。
+            */}
+            <div className="flex shrink-0 gap-1">
+              <Tab
+                active={panel.state === "summary"}
+                onClick={() => onShow("summary")}
+              >
+                災害別
+              </Tab>
+              <Tab
+                active={panel.state === "list"}
+                onClick={() => onShow("list")}
+              >
+                近い順
+              </Tab>
+            </div>
+            <h2 className="min-w-0 truncate text-xs font-semibold text-zinc-700">
+              {originLabel(origin)}から
+            </h2>
+          </>
         )}
-        <h2 className="text-xs font-semibold text-zinc-700">
-          {panel.state === "list"
-            ? `${originLabel(origin)}から近い順`
-            : "施設の詳細"}
-        </h2>
         {/*
           保存はここに置く。調べ終わった直後が、いちばん「残しておこう」と
           思える場所なので（PLAN の壁4「見て知っても何も残らない」への入口）。
         */}
-        {panel.state === "list" && onSavePlace && (
+        {panel.state !== "detail" && onSavePlace && (
           <button
             type="button"
             onClick={onSavePlace}
-            className="rounded-full border border-zinc-300 px-2.5 py-1 text-[11px] font-medium text-zinc-700 transition-colors hover:bg-zinc-50"
+            className="shrink-0 rounded-full border border-zinc-300 px-2.5 py-1 text-[11px] font-medium text-zinc-700 transition-colors hover:bg-zinc-50"
           >
-            ここを拠点に保存
+            拠点に保存
           </button>
         )}
         <button
@@ -102,7 +128,15 @@ export default function ShelterPanel({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-        {panel.state === "list" ? (
+        {panel.state === "summary" && (
+          <SummaryTable
+            key={originKey(origin)}
+            origin={origin}
+            onSelect={onSelect}
+            onFocus={onFocus}
+          />
+        )}
+        {panel.state === "list" && (
           <NearbyList
             key={nearbyKey(origin, filter)}
             origin={origin}
@@ -110,11 +144,176 @@ export default function ShelterPanel({
             onSelect={onSelect}
             onFocus={onFocus}
           />
-        ) : (
-          <DetailPane key={panel.id} id={panel.id} />
         )}
+        {panel.state === "detail" && <DetailPane key={panel.id} id={panel.id} />}
       </div>
     </div>
+  );
+}
+
+function Tab({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
+        active
+          ? "bg-zinc-900 text-white"
+          : "border border-zinc-200 text-zinc-500 hover:text-zinc-900"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+/**
+ * 「8種の災害 × それぞれの最寄り」の表。
+ *
+ * このアプリの主張1（避難場所は災害の種類ごとに分かれている）を、
+ * **1つの拠点について一度に**見せる。地図で1件ずつ確かめるのと違い、
+ * ここだけが持ち帰れる形になる（.local/PLAN.md 壁4）。
+ * 絞り込みは効かせない。8種すべてが並ぶこと自体が答えなので。
+ */
+function SummaryTable({
+  origin,
+  onSelect,
+  onFocus,
+}: {
+  origin: Origin | null;
+  onSelect: (item: NearbyItem) => void;
+  onFocus: (target: LatLng) => void;
+}) {
+  const [summary, setSummary] = useState<PlaceSummary | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!origin) return;
+    const controller = new AbortController();
+
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/shelters/summary?lat=${origin.lat}&lng=${origin.lng}`,
+          { signal: controller.signal },
+        );
+        if (!res.ok) throw new Error(`API が ${res.status} を返しました`);
+        setSummary(await res.json());
+      } catch (e) {
+        if (controller.signal.aborted) return;
+        setError(e instanceof Error ? e.message : "読み込みに失敗しました");
+      }
+    })();
+
+    return () => controller.abort();
+  }, [origin]);
+
+  if (!origin) {
+    return <Message>起点が決まっていません。</Message>;
+  }
+  if (error) return <Message>{error}</Message>;
+  if (!summary) return <Message>調べています…</Message>;
+
+  return (
+    <>
+      <ul className="divide-y divide-zinc-100">
+        {summary.rows.map((row) => (
+          <li key={row.disaster}>
+            <SummaryRowView
+              label={disasterLabel(row.disaster)}
+              item={row.nearest}
+              onSelect={onSelect}
+              onFocus={onFocus}
+            />
+          </li>
+        ))}
+      </ul>
+
+      {/*
+        指定避難所は災害種別を持たないので、8種の表に混ぜない。
+        混ぜると「この災害で使える避難所」と読まれる。
+      */}
+      <div className="border-t-4 border-zinc-100">
+        <p className="px-3 pt-2 text-[11px] text-zinc-500">
+          災害がおさまったあと、生活する場所（{kindOf("SHELTER").label}）
+        </p>
+        <SummaryRowView
+          label="最寄り"
+          item={summary.shelter}
+          onSelect={onSelect}
+          onFocus={onFocus}
+        />
+      </div>
+
+      <p className="px-3 py-2 text-[11px] leading-relaxed text-zinc-500">
+        半径{Math.round(summary.radiusM / 1000)}km まで探しました。
+        距離は直線距離で、実際の道のりではありません。
+        {summary.incomplete &&
+          "見つからなかった災害は、この付近にその災害で使える指定がありません。"}
+      </p>
+    </>
+  );
+}
+
+function SummaryRowView({
+  label,
+  item,
+  onSelect,
+  onFocus,
+}: {
+  label: string;
+  item: NearbyItem | null;
+  onSelect: (item: NearbyItem) => void;
+  onFocus: (target: LatLng) => void;
+}) {
+  if (!item) {
+    return (
+      <div className="flex items-start gap-2.5 px-3 py-2.5">
+        <span className="w-16 shrink-0 text-xs font-semibold text-zinc-900">
+          {label}
+        </span>
+        <span className="text-xs text-zinc-400">見つかりませんでした</span>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        onFocus(item);
+        onSelect(item);
+      }}
+      className="flex w-full items-start gap-2.5 px-3 py-2.5 text-left hover:bg-zinc-50"
+    >
+      <span className="w-16 shrink-0 pt-0.5 text-xs font-semibold text-zinc-900">
+        {label}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="flex items-center gap-1.5">
+          <span
+            className="size-2 shrink-0 rounded-full"
+            style={{ backgroundColor: kindOf(item.kind).color }}
+          />
+          <span className="truncate text-sm text-zinc-900">{item.name}</span>
+        </span>
+        <span className="mt-0.5 block truncate text-xs text-zinc-500">
+          {item.address}
+        </span>
+      </span>
+      <span className="w-12 shrink-0 pt-0.5 text-right text-xs font-semibold text-zinc-900 tabular-nums">
+        {formatDistance(item.distanceM)}
+      </span>
+    </button>
   );
 }
 
@@ -257,6 +456,11 @@ function DetailPane({ id }: { id: string }) {
       <ShelterDetailView detail={detail} />
     </div>
   );
+}
+
+/** 起点だけで作り直す単位。表は絞り込みを見ないので、こちらは起点だけ。 */
+function originKey(origin: Origin | null): string {
+  return `${origin?.lat}/${origin?.lng}`;
 }
 
 /**

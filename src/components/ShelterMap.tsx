@@ -365,7 +365,7 @@ export default function ShelterMap() {
           const { id } = feature.properties as { id: string };
           const [lng, lat] = (feature.geometry as GeoJSON.Point).coordinates;
           setSelected({ lat, lng });
-          setPanel({ state: "detail", id });
+          setPanel({ state: "detail", id, from: "list" });
         });
         map.on("mouseenter", LAYER_ID, () => {
           if (pickingRef.current) return;
@@ -547,7 +547,8 @@ export default function ShelterMap() {
       source: "saved",
       name: place.name,
     });
-    setPanel({ state: "list" });
+    // 拠点は「8種 × 最寄り」の表から始める。ここが持ち帰るものなので。
+    setPanel({ state: "summary" });
     const map = mapRef.current;
     if (map) liftAboveSheet(map, place, 14);
   }, []);
@@ -565,6 +566,7 @@ export default function ShelterMap() {
 
       placesStore.savePlace(place);
       setOrigin({ ...place, source: "saved", name: place.name });
+      setPanel({ state: "summary" });
     },
     [origin],
   );
@@ -846,8 +848,15 @@ export default function ShelterMap() {
             setPanel({ state: "closed" });
             setSelected(null);
           }}
-          onSelect={(item) => setPanel({ state: "detail", id: item.id })}
-          onBackToList={() => setPanel({ state: "list" })}
+          // 戻り先は、開いたときに見ていたほうにする。
+          onSelect={(item) =>
+            setPanel((current) => ({
+              state: "detail",
+              id: item.id,
+              from: current.state === "summary" ? "summary" : "list",
+            }))
+          }
+          onShow={(state) => setPanel({ state })}
           onFocus={focus}
         />
       </div>
