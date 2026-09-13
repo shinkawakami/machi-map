@@ -108,3 +108,28 @@ export function acceptOffered(persist: boolean): void {
 export function keepCurrent(): void {
   commit({ ...snapshot, offered: null });
 }
+
+/*
+  ここから下は「URL に入っている拠点をそのまま読む」だけの口。
+  印刷用のページのように、この端末の保存とは関係なく
+  **渡された URL の中身を出す**画面で使う。
+*/
+
+const NO_PLACES: Place[] = [];
+let urlCache: { key: string; places: Place[] } = { key: "\u0000", places: NO_PLACES };
+
+export function subscribeUrlPlaces(listener: () => void): () => void {
+  window.addEventListener("hashchange", listener);
+  return () => window.removeEventListener("hashchange", listener);
+}
+
+/** useSyncExternalStore に渡すので、同じ URL なら同じ配列を返す。 */
+export function getUrlPlaces(): Place[] {
+  const key = window.location.hash;
+  if (key !== urlCache.key) urlCache = { key, places: readPlacesFromUrl() };
+  return urlCache.places;
+}
+
+export function getServerUrlPlaces(): Place[] {
+  return NO_PLACES;
+}

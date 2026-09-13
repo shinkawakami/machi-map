@@ -18,6 +18,7 @@ import {
 
 import RegionJump from "@/components/RegionJump";
 import SavePlaceDialog from "@/components/SavePlaceDialog";
+import ShareSheet from "@/components/ShareSheet";
 import ShelterFilterBar from "@/components/ShelterFilterBar";
 import ShelterPanel, {
   type Origin,
@@ -156,7 +157,8 @@ export default function ShelterMap() {
   );
   /** 起点を拠点として保存する最中 */
   const [saving, setSaving] = useState(false);
-  const [copied, setCopied] = useState(false);
+  /** 共有・印刷のシートを開いている最中 */
+  const [sharing, setSharing] = useState(false);
   const [selected, setSelected] = useState<LatLng | null>(null);
   const [locating, setLocating] = useState(false);
   const [locateError, setLocateError] = useState<string | null>(null);
@@ -571,20 +573,6 @@ export default function ShelterMap() {
     [origin],
   );
 
-  /**
-   * 共有用の URL をコピーする。URL が正本なので、これがそのままバックアップになる。
-   * 中身に自宅の位置が入るため、貼る先の注意はボタンのすぐ横に出す。
-   */
-  const copyShareUrl = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(window.location.href);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-    } catch {
-      setCopied(false);
-    }
-  }, []);
-
   /** 場所を決めるモードに入る。下段は確定バーに譲るので、一覧は閉じる。 */
   const startPicking = useCallback(() => {
     setPicking(true);
@@ -720,14 +708,11 @@ export default function ShelterMap() {
                   ))}
                   <button
                     type="button"
-                    onClick={copyShareUrl}
+                    onClick={() => setSharing(true)}
                     className="mt-0.5 self-start text-[11px] text-zinc-500 underline underline-offset-2 hover:text-zinc-900"
                   >
-                    {copied ? "コピーしました" : "この拠点を家族に送る URL をコピー"}
+                    家族に送る・紙に出す（QR コード）
                   </button>
-                  <p className="text-[11px] leading-relaxed text-zinc-400">
-                    URL には保存した場所の位置が入ります。公開の場に貼らないでください。
-                  </p>
                 </div>
               )}
 
@@ -789,6 +774,10 @@ export default function ShelterMap() {
               </div>
             </div>
           </>
+        )}
+
+        {sharing && places.length > 0 && (
+          <ShareSheet places={places} onClose={() => setSharing(false)} />
         )}
 
         {saving && origin && (

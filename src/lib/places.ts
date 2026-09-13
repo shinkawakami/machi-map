@@ -136,6 +136,16 @@ function readPlacesParam(hash: string): string | null {
   return null;
 }
 
+/** 共有・印刷で使うフラグメント。`#s=自宅,35.6580,139.7016` の形。 */
+export function placesHash(places: Place[]): string {
+  return places.length ? `#${PLACES_PARAM}=${encodePlaces(places)}` : "";
+}
+
+/** 家族に送る URL。いまのページではなく、必ず地図のトップを指す。 */
+export function shareUrl(places: Place[]): string {
+  return `${window.location.origin}/${placesHash(places)}`;
+}
+
 /**
  * URL を書き換える。履歴は積まない（戻るボタンで拠点が消えたり戻ったりすると、
  * 何が起きたのか分からなくなる）。

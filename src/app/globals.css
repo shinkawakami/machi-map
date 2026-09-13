@@ -10,3 +10,24 @@ body {
   color: #18181b;
   font-family: var(--font-sans);
 }
+
+/*
+ * 印刷。トップは地図を画面いっぱいに出すために body を h-dvh + overflow-hidden に
+ * しているが、そのままだと印刷が1ページで切れる。紙では普通の流し込みに戻す。
+ * 紙に出せることは機能のひとつ（冷蔵庫に貼れる形にする）なので、ここで手当てする。
+ */
+@media print {
+  @page {
+    margin: 12mm;
+  }
+
+  html,
+  body {
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+}
