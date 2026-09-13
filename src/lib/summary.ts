@@ -1,11 +1,10 @@
 import { DISASTER_TYPES, type DisasterKey, disasterLabel } from "@/lib/disasters";
-import type { NearbyItem } from "@/lib/nearby";
-import type { SummaryRow } from "@/lib/place-summary";
+import type { NearbyItem, SummaryRow } from "@/lib/shelter";
 
 /**
- * 「8種 × 最寄り」を読める形に畳む。画面（ShelterPanel）と紙（PrintSheet）で共有する。
+ * 「8種 × 最寄り」を読める形に畳む。画面（features/panel）と紙（features/places/PrintSheet）で共有する。
  *
- * サーバー側（lib/place-summary.ts）は8種ぶんを素直に8行で返す。**そのまま8行出すと、
+ * サーバー側（src/server/place-summary.ts）は8種ぶんを素直に8行で返す。**そのまま8行出すと、
  * このアプリがいちばん見せたい差が消える。** 全国の指定避難所の位置を居住地の代わりに
  * 300点サンプリングして、8種それぞれの最寄りを引いて数えた結果:
  *
@@ -18,14 +17,12 @@ import type { SummaryRow } from "@/lib/place-summary";
  * 3人に1人は**同じ小学校が8回並んだ表**を受け取る。「災害の種類ごとに使える・使えないが
  * 分かれる」という主張が、それを言うための画面で消えていた。**同じ施設は1行に束ね、
  * 違う行だけを立てる。**
- *
- * Prisma を持ち込まない純粋な関数に保つこと（クライアントから読む）。
  */
 
 /**
  * 「近く」と言い切れる距離（m）。
  *
- * 半径のはしごは 256km まで伸びる（lib/nearby.ts の RADII_M）。**その災害の指定が
+ * 半径のはしごは 256km まで伸びる（src/server/nearby.ts の RADII_M）。**その災害の指定が
  * 自分の市町村に無いと、隣やその先の市町村の指定を拾って、それを最寄りとして返す。**
  * 上と同じ標本で測ると、最寄りまでの距離は 1km 以内が 66.6%・2km 以内が 72.1% に
  * かたまり、そこから 3〜8km が薄く（7.1%）、8〜15km にもう一つの山（15.6%）が立つ。

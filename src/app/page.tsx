@@ -1,5 +1,5 @@
 import IntroCard from "@/components/IntroCard";
-import ShelterMap from "@/components/ShelterMap";
+import ShelterMap from "@/features/map/ShelterMap";
 import SiteFooter from "@/components/SiteFooter";
 
 export default function Home() {

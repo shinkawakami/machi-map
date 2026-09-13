@@ -1,5 +1,5 @@
-import { normalizeAddress } from "@/lib/address";
-import { prisma } from "@/lib/db";
+import { type GeocodeHit, normalizeAddress } from "@/lib/address";
+import { prisma } from "@/server/db";
 
 /**
  * 住所から拠点を置くための検索。
@@ -13,18 +13,8 @@ import { prisma } from "@/lib/db";
  * 広げるため、町丁目の代表点と番地の差（数百 m）は最寄りの順位をほとんど変えない。
  */
 
-export type GeocodeHit = {
-  /** 「東京都千代田区内幸町一丁目」の形 */
-  label: string;
-  prefecture: string;
-  municipality: string;
-  name: string;
-  lat: number;
-  lng: number;
-};
-
-const DEFAULT_LIMIT = 10;
-const MAX_LIMIT = 20;
+/** 住所は候補を並べて選ばせるので、近い順（20件）より少し少なめでよい。 */
+export const GEOCODE_LIMIT = 10;
 
 const SELECT = {
   prefecture: true,
@@ -34,19 +24,9 @@ const SELECT = {
   lng: true,
 } as const;
 
-export function parseLimit(raw: string | null): number {
-  // `Number(null)` も `Number("")` も 0 になる。0 は有限なのでそのまま通り、
-  // 下の clamp で 1 に丸められる。**省略されたときに1件しか返らない**ので、
-  // 数に変換する前に「指定が無い」を弾く。
-  if (!raw?.trim()) return DEFAULT_LIMIT;
-  const n = Number(raw);
-  if (!Number.isFinite(n)) return DEFAULT_LIMIT;
-  return Math.round(Math.min(Math.max(n, 1), MAX_LIMIT));
-}
-
 export async function searchAddress(
   query: string,
-  limit = DEFAULT_LIMIT,
+  limit = GEOCODE_LIMIT,
 ): Promise<GeocodeHit[]> {
   const key = normalizeAddress(query);
   // 1文字だと全国の何千件かが並ぶだけで、選ぶ役に立たない。

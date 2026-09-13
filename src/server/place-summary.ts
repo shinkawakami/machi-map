@@ -1,43 +1,23 @@
 import { Prisma } from "@/generated/prisma/client";
-import { prisma } from "@/lib/db";
-import { type DisasterKey, DISASTER_TYPES } from "@/lib/disasters";
+import { DISASTER_TYPES } from "@/lib/disasters";
+import { bboxAround, type LatLng } from "@/lib/geo";
+import type { NearbyItem, PlaceSummary } from "@/lib/shelter";
+import { prisma } from "@/server/db";
+import { type DetailRow, toDetail } from "@/server/shelter-detail";
 import {
-  bboxAround,
-  type LatLng,
-  type NearbyItem,
+  DETAIL_COLUMNS,
   RADII_M,
   sqlDistanceM,
-} from "@/lib/nearby";
-import { type DetailRow, toDetail } from "@/lib/shelter-detail";
+  sqlWithinBbox,
+} from "@/server/shelter-query";
 
 /**
- * 拠点ごとの「8種の災害 × それぞれの最寄り」。
- *
- * このアプリで**持ち帰れるもの**にあたる部分。
- * 1地点ぶんの地図を見せて終わりにすると、調べ終わったあとに何も残らず、
- * 次に開く理由がなくなる（.local/PLAN.md「利用シーンの整理」の壁4）。
- * 8種ぶんまとめて出せば、そのまま家族に送れて、紙にも出せる。
+ * 拠点ごとの「8種の災害 × それぞれの最寄り」を引く。
+ * 返す形（PlaceSummary）は src/lib/shelter.ts。
  *
  * 災害種別を持つのは指定緊急避難場所だけなので、表の本体はそちら。
  * 指定避難所（生活する場所）は別枠で最寄りを1件だけ添える。
  */
-
-export type SummaryRow = {
-  disaster: DisasterKey;
-  /** 上限まで広げても見つからなければ null */
-  nearest: NearbyItem | null;
-};
-
-export type PlaceSummary = {
-  /** 最後に使った半径（m）。どこまで広げたのかは UI で見せる */
-  radiusM: number;
-  /** 埋まらなかった災害種別があるか */
-  incomplete: boolean;
-  /** DISASTER_TYPES と同じ並び（国土地理院 CSV の列順） */
-  rows: SummaryRow[];
-  /** 指定避難所の最寄り。災害種別の指定はない */
-  shelter: NearbyItem | null;
-};
 
 type Row = DetailRow & { slot: string; distanceM: number };
 
@@ -105,14 +85,10 @@ function queryNearestEach(
     return Prisma.sql`(
       SELECT
         ${slot} AS "slot",
-        "sourceId", kind, name, address, lat, lng,
-        flood, landslide, "stormSurge", earthquake,
-        tsunami, fire, "inlandFlood", volcano,
-        "sameAddressAsOther", "targetPersons", "otherMatters", note,
+        ${DETAIL_COLUMNS},
         ${distance} AS "distanceM"
       FROM "Shelter"
-      WHERE lat BETWEEN ${bbox.south} AND ${bbox.north}
-        AND lng BETWEEN ${bbox.west} AND ${bbox.east}
+      WHERE ${sqlWithinBbox(bbox)}
         AND ${kindAndFlag}
       ORDER BY "distanceM"
       LIMIT 1

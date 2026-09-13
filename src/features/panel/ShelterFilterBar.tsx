@@ -10,7 +10,7 @@ import {
   disasterLabel,
 } from "@/lib/disasters";
 import { KINDS } from "@/lib/kinds";
-import type { ShelterFilter } from "@/lib/shelters";
+import type { ShelterFilter } from "@/lib/filter";
 
 /**
  * 絞り込み。**1行に畳んでパネルの中に置く。**
@@ -28,7 +28,7 @@ import type { ShelterFilter } from "@/lib/shelters";
  * 単一選択は、降ろしたはずの発災直後の問いだけに合わせた形だった。
  *
  * **掛け合わせは AND（選んだ災害のすべてで使える場所）。** OR にすると、
- * 地図の点が「どちらの災害で使えるのか」を点からは読めなくなる（lib/shelters.ts）。
+ * 地図の点が「どちらの災害で使えるのか」を点からは読めなくなる（src/lib/filter.ts）。
  */
 export default function ShelterFilterBar({
   value,
@@ -65,7 +65,7 @@ export default function ShelterFilterBar({
    * **押すと種別も指定避難所だけに寄せる。** 受入対象者は指定避難所にしかない列で、
    * 黙って立てると緊急避難場所がすべて消える。消えた理由が画面のどこにも
    * 残らないのを避けて、**種別チップのほうも一緒に動かして目に見えるようにする**
-   * （絞り込みの状態は画面に出す、という整理。lib/filter-view.ts）。
+   * （絞り込みの状態は画面に出す、という整理。src/lib/filter.ts の filterBadges）。
    */
   const toggleWelfare = () => {
     const on = !value.welfareOnly;
@@ -79,7 +79,7 @@ export default function ShelterFilterBar({
   const chosen = value.disasters;
   const shelterVisible = value.kinds.includes("SHELTER");
 
-  /** 押すたびに入れ替える。並びの正規化は lib/disasters.ts に任せる。 */
+  /** 押すたびに入れ替える。並びの正規化は src/lib/disasters.ts に任せる。 */
   const toggleDisaster = (key: DisasterKey) => {
     const next = chosen.includes(key)
       ? chosen.filter((k) => k !== key)

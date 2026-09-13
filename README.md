@@ -437,7 +437,7 @@ https://wagaya-nigesaki.vercel.app/#s=自宅,35.6580,139.7016;職場,35.6812,139
 | 5施設以上 | 15.0% |
 
 3人に1人は「同じ小学校が8回並んだ表」を受け取ることになります。
-**同じ施設に落ちた災害は1行に束ね、違う行だけを立てます**（`lib/summary-view.ts`）。
+**同じ施設に落ちた災害は1行に束ね、違う行だけを立てます**（`src/lib/summary.ts`）。
 8種すべてが1つに落ちたときは、名前を8つ並べずに「8種すべての災害」と書きます。
 
 もうひとつ、**遠すぎるものを答えの顔で並べない**ようにしました。近い順の半径は
@@ -458,7 +458,7 @@ https://wagaya-nigesaki.vercel.app/#s=自宅,35.6580,139.7016;職場,35.6812,139
 それはそれで知りたい情報なので）。**紙にも同じ規則で刷ります**。紙は戻って確かめられないぶん、
 同じ名前が8回並ぶ表はなお読みにくく、間違った行は貼ったまま何年も嘘をつきます。
 
-サーバー側（`lib/place-summary.ts`）は8行のまま返します。畳むのも遠さの判定も表示側の
+サーバー側（`src/server/place-summary.ts`）は8行のまま返します。畳むのも遠さの判定も表示側の
 仕事なので、API とキャッシュには手を入れていません。
 
 ### 12. フッタの全文を、地図から場所を借りない形にする
@@ -728,37 +728,68 @@ npm run import:isj -- --refresh
 
 ## 構成
 
+**置き場所で「どこで動くか」を分けています。** 純粋なもの・ブラウザでしか動かないもの・
+DB を引くものが同じフォルダに混ざっていると、クライアントの部品が
+「型だけだから」とサーバー側のモジュールへ手を伸ばせてしまい、値をひとつ import した
+瞬間に Prisma がブラウザのバンドルに入ります。コメントで守るのをやめました。
+
+| 置き場所 | 動く場所 | 何を置くか |
+|---|---|---|
+| `src/lib` | どこでも | 災害8種・種別・格子の吸着・API の型・拠点の値 |
+| `src/client` | ブラウザだけ | fetch の口・URL と localStorage・小さなフック |
+| `src/server` | サーバーだけ | Prisma のクエリ・キャッシュヘッダ・引数の読み取り |
+| `src/features` | 画面 | 地図・パネル・拠点まわりの部品 |
+| `src/components` | 画面 | どの画面からも使う土台（Modal・QR・出典） |
+
 ```
 src/
-  app/
+  app/                               ルーティングだけを置く
     api/shelters/route.ts            表示範囲の点 / クラスタ
     api/shelters/nearby/route.ts     近い順
     api/shelters/summary/route.ts    拠点ごとの「8種 × 最寄り」
     api/shelters/[sourceId]/route.ts 詳細
     api/geocode/route.ts             住所の候補
+    coverage/page.tsx                データの公開状況
     print/page.tsx                   印刷用の紙（拠点の表と QR）
     page.tsx / layout.tsx
-  components/
-    ShelterMap.tsx                   地図と状態の取りまとめ
-    ShelterFilterBar.tsx             災害種別・種別の絞り込み（凡例を兼ねる）
-    ShelterPanel.tsx                 操作と結果のパネル（表 / 一覧 / 詳細）
-    ShelterDetailView.tsx            8種の ○/× を含む詳細表示
-    AddressSearch.tsx                住所から地図を寄せる
-    Modal.tsx                        背景を塞いで聞くダイアログの土台
-    SavePlaceDialog.tsx              拠点の名前を決める（プリセット優先）
-    ShareSheet.tsx                   QR・URL のコピー・印刷への導線
-    PrintSheet.tsx                   紙に出す表
-    QrCode.tsx                       QR（クライアント生成・自前 SVG）
-    SiteFooter.tsx                   出典と注意書き（常設）
-  lib/
+
+  lib/                               DB もブラウザ API も触らない
+    disasters.ts / kinds.ts          災害種別と種別の定義（ラベル・色の単一の出どころ）
+    filter.ts                        絞り込みの型・クエリ文字列・状態の見せ方
+    shelter.ts                       公開 API がやりとりする形（型だけ）
+    geo.ts                           格子への吸着・座標の丸め・矩形の計算
+    summary.ts                       「8種 × 最寄り」を読める形に畳む（画面と紙で共有）
+    places.ts                        拠点の値（文字列との行き来）
+    origin.ts                        起点（どこの話をしているか）
+    address.ts                       住所の正規化（取り込みと検索で共有する）
+    format.ts                        距離・日付・桁区切り
+
+  client/                            ブラウザでしか動かない
+    api.ts                           公開 API の URL 組み立てと取得
+    use-resource.ts                  取得の3状態（読み込み中 / 失敗 / 結果）
+    use-timed-offer.ts               しばらくだけ出す「元に戻す」
+    places-url.ts                    URL のフラグメントと localStorage
+    places-store.ts                  拠点の外部ストア（useSyncExternalStore）
+
+  server/                            DB を引く
+    db.ts                            Prisma クライアント（1つだけ持つ）
+    params.ts                        クエリ文字列の読み取り
+    http-cache.ts                    CDN とブラウザのキャッシュ指定
+    shelter-query.ts                 生 SQL の述語と列（3か所で共有）
     shelters.ts                      bbox・絞り込み・クラスタ集約
     nearby.ts                        半径のはしごによる近い順
     place-summary.ts                 8種 × 最寄りを1往復で引く
-    places.ts / places-store.ts      拠点の形と、URL / localStorage の読み書き
-    address.ts                       住所の正規化（取り込みと検索で共有する）
-    geocode.ts                       町字テーブルの前方一致検索
     shelter-detail.ts                共通IDでの1件取得
-    disasters.ts / kinds.ts          災害種別と種別の定義（ラベル・色の単一の出どころ）
+    geocode.ts                       町字テーブルの前方一致検索
+    coverage.ts                      公開状況の集計
+
+  features/
+    map/                             地図（スタイル・マーカー・取得・起点の state）
+    panel/                           操作と結果のパネル（表 / 一覧 / 詳細 / 絞り込み / 住所）
+    places/                          拠点の保存・共有・印刷
+
+  components/                        Modal / QrCode / SiteFooter / IntroCard
+
 scripts/import-gsi.ts                国土地理院データの取り込み
 scripts/import-isj.ts                位置参照情報（町字）の取り込み
 prisma/schema.prisma

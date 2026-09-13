@@ -1,5 +1,6 @@
-import { parseLimit, searchAddress } from "@/lib/geocode";
-import { cachedJson } from "@/lib/http-cache";
+import { GEOCODE_LIMIT, searchAddress } from "@/server/geocode";
+import { cachedJson } from "@/server/http-cache";
+import { parseLimit } from "@/server/params";
 
 /**
  * GET /api/geocode?q=千代田区内幸町&limit=10
@@ -15,6 +16,6 @@ export async function GET(request: Request) {
   const params = new URL(request.url).searchParams;
   const query = params.get("q") ?? "";
   return cachedJson(
-    await searchAddress(query, parseLimit(params.get("limit"))),
+    await searchAddress(query, parseLimit(params.get("limit"), GEOCODE_LIMIT, 20)),
   );
 }

@@ -5,9 +5,7 @@
  * 扱う中心のデータ。`key` は Shelter の列名とそろえてある（クエリ文字列にもそのまま使う）。
  * 順序は国土地理院 CSV の列順のまま。並べ替える理由がないし、出典と突き合わせやすい。
  *
- * ここは Prisma を持ち込まない純粋なデータに保つ。クライアント側の
- * フィルタ UI からも読むので、サーバー専用のものを混ぜるとバンドルに入る。
- * where 句への対応づけは lib/shelters.ts 側に置いてある。
+ * where 句への対応づけは src/server/shelter-query.ts 側に置いてある。
  */
 export const DISASTER_TYPES = [
   { key: "flood", label: "洪水", sourceLabel: "洪水" },
@@ -40,10 +38,10 @@ export function disasterLabel(key: DisasterKey): string {
  * 選んだ災害種別を **DISASTER_TYPES の順に並べ直し、重複を落とす。**
  *
  * **並びを固定するのはキャッシュのため。** 絞り込みはクエリ文字列に出て、
- * CDN は URL をキーにする（lib/http-cache.ts）。押した順のまま並べると
+ * CDN は URL をキーにする（src/server/http-cache.ts）。押した順のまま並べると
  * `flood,earthquake` と `earthquake,flood` が別の URL になり、同じ問い合わせが
  * 2つのキーに散る。8種から選ぶと順列は最大 40,320 通りあるので、
- * 丸めずに置くと bbox を格子に吸着させた意味が薄れる（lib/grid.ts と同じ話）。
+ * 丸めずに置くと bbox を格子に吸着させた意味が薄れる（src/lib/geo.ts と同じ話）。
  *
  * 並べ替えの基準に CSV の列順を使うのは、ここが唯一の出どころだから。
  * UI の表示順もこれなので、URL を見たときに画面と同じ順で読める。

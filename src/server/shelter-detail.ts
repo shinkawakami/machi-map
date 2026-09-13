@@ -1,50 +1,17 @@
 import type { ShelterKind } from "@/generated/prisma/enums";
-import { prisma } from "@/lib/db";
 import { DISASTER_TYPES, type DisasterKey } from "@/lib/disasters";
+import type { PlaceDetail, ShelterDetail } from "@/lib/shelter";
+import { prisma } from "@/server/db";
 
 /**
- * 1つの指定の中身。地図の点を押したときと、近い順の一覧の各行で同じものを見せる。
- *
- * `disasters` を「空配列」ではなく null にできるようにしているのが要点。
- * 指定避難所には災害種別の指定がそもそも存在しないので、
- * 「どの災害でも使えない」（空配列）と混ぜてはいけない。DB の nullable と同じ理由。
+ * `"Shelter"` の1行を、外に出す形（src/lib/shelter.ts の ShelterDetail）に変える。
+ * 地図の点を押したときと、近い順の一覧の各行で同じものを見せる。
  */
-export type ShelterDetail = {
-  /** 共通ID。Shelter.id は取り込みのたびに変わるので外には出さない */
-  id: string;
-  kind: ShelterKind;
-  name: string;
-  address: string;
-  lat: number;
-  lng: number;
-  /** 対応する災害種別。kind=SHELTER のときは null（指定という概念がない） */
-  disasters: DisasterKey[] | null;
-  /** もう一方のデータセットに住所が同じ指定がある（同一施設とは限らない） */
-  sameAddressAsOther: boolean;
-  /** 受入対象者（指定福祉避難所のみ） */
-  targetPersons: string | null;
-  /** その他市町村長が必要と認める事項 */
-  otherMatters: string | null;
-  note: string | null;
-};
 
 /**
- * 1つの場所が持っている指定を、まとめて返す形。
- *
- * 地図でも一覧でも、**同じ施設（名前＋住所が一致）の指定は1つにまとめて出す**。
- * まとめた以上、押した先で1つしか出ないと**ほかの指定にしか無い項目が消える**
- * （受入対象者は指定福祉避難所、その他市町村長が必要と認める事項は指定避難所の列）。
- *
- * **2つとは限らない。** 同じ名前・住所に指定避難所が2つ（通常と福祉避難所）ある
- * 施設が実データで 1,484 あり、うち 1,125 行が受入対象者を持つ。
- * 「もう一方」ではなく、残り全部を配列で持つ。
+ * findMany / findUnique の select。
+ * 生 SQL 側の列並び（src/server/shelter-query.ts の DETAIL_COLUMNS）とそろえること。
  */
-export type PlaceDetail = ShelterDetail & {
-  /** 同じ名前・同じ住所にある、ほかの指定。無ければ空 */
-  others: ShelterDetail[];
-};
-
-/** findMany / findUnique の select。生 SQL 側の列とそろえること。 */
 export const DETAIL_SELECT = {
   sourceId: true,
   // もう一方の指定を引くときの絞り込みに使う（name/address に索引が無いので、
@@ -112,7 +79,7 @@ export async function fetchDetail(
 
   /*
     同じ施設のほかの指定を引く。**鍵は名前＋住所**で、地図と一覧がまとめるときと
-    同じ条件（lib/shelters.ts の collapsePoints、lib/nearby.ts の mergeSameFacility）。
+    同じ条件（src/server/shelters.ts の collapsePoints、src/server/nearby.ts の mergeSameFacility）。
     ここだけ条件が違うと、まとめて出したのに中身が出ない組が生まれる。
 
     **市町村コードを先に置く。** name / address には索引が無く、そのまま引くと

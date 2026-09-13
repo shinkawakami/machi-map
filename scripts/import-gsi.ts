@@ -15,7 +15,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { parse, type OptionsWithColumns } from "csv-parse/sync";
-import { prisma } from "../src/lib/db";
+import { prisma } from "../src/server/db";
 import type { Prisma } from "../src/generated/prisma/client";
 import type { ShelterKind } from "../src/generated/prisma/enums";
 

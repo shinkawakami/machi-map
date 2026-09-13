@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import SiteFooter from "@/components/SiteFooter";
-import { type CoverageRow, fetchCoverage, percent } from "@/lib/coverage";
 import { formatCount, formatDate } from "@/lib/format";
 import { KINDS } from "@/lib/kinds";
+import { type CoverageRow, fetchCoverage, percent } from "@/server/coverage";
 
 export const metadata: Metadata = {
   title: "データの公開状況 | わが家の逃げ先",

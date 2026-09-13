@@ -1,6 +1,6 @@
-import { cachedJson, errorJson } from "@/lib/http-cache";
-import { parseLatLng } from "@/lib/nearby";
-import { fetchPlaceSummary } from "@/lib/place-summary";
+import { cachedJson, errorJson } from "@/server/http-cache";
+import { parseLatLng } from "@/server/params";
+import { fetchPlaceSummary } from "@/server/place-summary";
 
 /**
  * GET /api/shelters/summary?lat=35.68&lng=139.76

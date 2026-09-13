@@ -2,19 +2,18 @@
 
 import { useEffect, useState } from "react";
 
+import { api, errorMessage, fetchJson } from "@/client/api";
 import QrCode from "@/components/QrCode";
 import { formatDistance } from "@/lib/format";
-import { roundCoord } from "@/lib/grid";
 import { kindOf } from "@/lib/kinds";
-import type { NearbyItem } from "@/lib/nearby";
-import type { PlaceSummary } from "@/lib/place-summary";
 import type { Place } from "@/lib/places";
+import type { NearbyItem, PlaceSummary } from "@/lib/shelter";
 import {
   groupSummaryRows,
   groupTitle,
   isFar,
   NEARBY_LIMIT_M,
-} from "@/lib/summary-view";
+} from "@/lib/summary";
 
 /**
  * 拠点ごとの「8種 × 最寄り」を紙に出す。
@@ -61,18 +60,14 @@ export default function PrintSheet({
       const loaded = await Promise.all(
         places.map(async (place): Promise<Loaded> => {
           try {
-            // 画面で見たときと同じ URL になるよう、同じ丸めを通す（lib/grid.ts）。
-            const res = await fetch(
-              `/api/shelters/summary?lat=${roundCoord(place.lat)}&lng=${roundCoord(place.lng)}`,
-              { signal: controller.signal },
+            // 画面で見たときと同じ URL になる（src/client/api.ts が丸めを通す）。
+            const summary = await fetchJson<PlaceSummary>(
+              api.summary(place),
+              controller.signal,
             );
-            if (!res.ok) throw new Error(`API が ${res.status} を返しました`);
-            return { summary: (await res.json()) as PlaceSummary, error: null };
+            return { summary, error: null };
           } catch (e) {
-            return {
-              summary: null,
-              error: e instanceof Error ? e.message : "読み込みに失敗しました",
-            };
+            return { summary: null, error: errorMessage(e) };
           }
         }),
       );
@@ -171,7 +166,7 @@ function PlaceTable({
               </tr>
             </thead>
             {/*
-              画面と同じく、同じ施設に落ちた災害は1行に束ねる（lib/summary-view.ts）。
+              画面と同じく、同じ施設に落ちた災害は1行に束ねる（src/lib/summary.ts）。
               紙は戻って確かめられないぶん、同じ名前が8回並ぶ表はなお読みにくい。
             */}
             <tbody>

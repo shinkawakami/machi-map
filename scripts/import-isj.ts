@@ -17,7 +17,7 @@ import path from "node:path";
 import { parse } from "csv-parse/sync";
 import { unzipSync } from "fflate";
 import { normalizeAddress } from "../src/lib/address";
-import { prisma } from "../src/lib/db";
+import { prisma } from "../src/server/db";
 import type { Prisma } from "../src/generated/prisma/client";
 
 /**

@@ -1,12 +1,14 @@
+"use client";
+
+import { useSyncExternalStore } from "react";
+
 import {
-  MAX_PLACES,
-  type Place,
   readCachedPlaces,
   readPlacesFromUrl,
-  samePlaces,
   syncUrl,
   writeCachedPlaces,
-} from "@/lib/places";
+} from "@/client/places-url";
+import { MAX_PLACES, type Place, samePlaces } from "@/lib/places";
 
 /**
  * 拠点の置き場。**React の state ではなく、URL と localStorage のほうが本体**なので、
@@ -35,15 +37,20 @@ let initialized = false;
 const listeners = new Set<() => void>();
 
 /** サーバー側では読めない。空から始めて、購読が始まった時点で読み直す。 */
-export function getServerSnapshot(): PlacesSnapshot {
+function getServerSnapshot(): PlacesSnapshot {
   return EMPTY;
 }
 
-export function getSnapshot(): PlacesSnapshot {
+/** 部品から読むときの口。ストアの3つ組を毎回書かなくて済む。 */
+export function usePlaces(): PlacesSnapshot {
+  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+}
+
+function getSnapshot(): PlacesSnapshot {
   return snapshot;
 }
 
-export function subscribe(listener: () => void): () => void {
+function subscribe(listener: () => void): () => void {
   if (!initialized) {
     initialized = true;
     snapshot = load();
@@ -111,25 +118,33 @@ export function keepCurrent(): void {
 
 /*
   ここから下は「URL に入っている拠点をそのまま読む」だけの口。
-  印刷用のページのように、この端末の保存とは関係なく
+  印刷用のページ（/print）のように、この端末の保存とは関係なく
   **渡された URL の中身を出す**画面で使う。
 */
 
 const NO_PLACES: Place[] = [];
 let urlCache: { key: string; places: Place[] } = { key: "\u0000", places: NO_PLACES };
 
-export function subscribeUrlPlaces(listener: () => void): () => void {
+function subscribeUrlPlaces(listener: () => void): () => void {
   window.addEventListener("hashchange", listener);
   return () => window.removeEventListener("hashchange", listener);
 }
 
 /** useSyncExternalStore に渡すので、同じ URL なら同じ配列を返す。 */
-export function getUrlPlaces(): Place[] {
+function getUrlPlaces(): Place[] {
   const key = window.location.hash;
   if (key !== urlCache.key) urlCache = { key, places: readPlacesFromUrl() };
   return urlCache.places;
 }
 
-export function getServerUrlPlaces(): Place[] {
+function getServerUrlPlaces(): Place[] {
   return NO_PLACES;
+}
+
+export function useUrlPlaces(): Place[] {
+  return useSyncExternalStore(
+    subscribeUrlPlaces,
+    getUrlPlaces,
+    getServerUrlPlaces,
+  );
 }

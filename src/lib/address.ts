@@ -40,3 +40,20 @@ export function normalizeAddress(input: string): string {
       .replace(/(\d+)丁目/g, (_, n: string) => `${toKanjiNumber(Number(n))}丁目`)
   );
 }
+
+/**
+ * 住所検索の1件。町丁目の代表点まで。
+ *
+ * 番地は持たない。答える問いは「近くのどこへ逃げるか」で、その先は近い順が
+ * 半径2kmから広げるため、町丁目の代表点と番地の差（数百 m）は
+ * 最寄りの順位をほとんど変えない。
+ */
+export type GeocodeHit = {
+  /** 「東京都千代田区内幸町一丁目」の形 */
+  label: string;
+  prefecture: string;
+  municipality: string;
+  name: string;
+  lat: number;
+  lng: number;
+};

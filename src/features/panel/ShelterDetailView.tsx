@@ -3,7 +3,7 @@
 import type { ShelterKind } from "@/generated/prisma/enums";
 import { type DisasterKey, DISASTER_TYPES } from "@/lib/disasters";
 import { kindOf, KINDS } from "@/lib/kinds";
-import type { PlaceDetail, ShelterDetail } from "@/lib/shelter-detail";
+import type { PlaceDetail, ShelterDetail } from "@/lib/shelter";
 
 /**
  * 1つの場所の中身。

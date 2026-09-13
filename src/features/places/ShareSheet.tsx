@@ -4,7 +4,8 @@ import { useState } from "react";
 
 import Modal from "@/components/Modal";
 import QrCode from "@/components/QrCode";
-import { placesHash, type Place, shareUrl } from "@/lib/places";
+import { shareUrl } from "@/client/places-url";
+import { type Place, placesHash } from "@/lib/places";
 
 /**
  * 拠点を家族に送る／紙に残すための一式。

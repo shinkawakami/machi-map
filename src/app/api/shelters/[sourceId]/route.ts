@@ -1,5 +1,5 @@
-import { cachedJson, errorJson } from "@/lib/http-cache";
-import { fetchDetail } from "@/lib/shelter-detail";
+import { cachedJson, errorJson } from "@/server/http-cache";
+import { fetchDetail } from "@/server/shelter-detail";
 
 /**
  * GET /api/shelters/<共通ID>

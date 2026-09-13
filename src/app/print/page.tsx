@@ -1,29 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useSyncExternalStore } from "react";
+import { useState } from "react";
 
-import PrintSheet from "@/components/PrintSheet";
-import { placesHash, shareUrl } from "@/lib/places";
-import {
-  getServerUrlPlaces,
-  getUrlPlaces,
-  subscribeUrlPlaces,
-} from "@/lib/places-store";
+import { useUrlPlaces } from "@/client/places-store";
+import { shareUrl } from "@/client/places-url";
+import PrintSheet from "@/features/places/PrintSheet";
+import { placesHash } from "@/lib/places";
 
 /**
  * 印刷用の紙。拠点は URL のフラグメントから読む。
  *
  * フラグメントはサーバーに送られないので、この画面はクライアントで組む。
  * 「自宅の位置をサーバーに渡さない」という決めごとの、そのままの帰結
- * （lib/places.ts の readPlacesFromUrl を参照）。
+ * （src/lib/places.ts の placesHash を参照）。
  */
 export default function PrintPage() {
-  const places = useSyncExternalStore(
-    subscribeUrlPlaces,
-    getUrlPlaces,
-    getServerUrlPlaces,
-  );
+  const places = useUrlPlaces();
   /**
    * 表が全部そろったか。**そろうまで刷らせない。**
    * 取得の途中で押せると「調べています…」がそのまま紙に出る。

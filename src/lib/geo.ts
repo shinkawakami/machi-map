@@ -1,16 +1,19 @@
 /**
- * 地図のリクエストを「繰り返す URL」に落とすための丸め。
+ * 座標まわりの計算。**DB もブラウザ API も触らないので、どこからでも読める。**
  *
- * CDN は URL をキーにキャッシュする。ビューポートの bbox をそのまま載せると
+ * 地図のリクエストを「繰り返す URL」に落とすための丸めが主役。CDN は URL を
+ * キーにキャッシュするので、ビューポートの bbox をそのまま載せると
  * **1px パンしただけで別の URL** になり、キャッシュはまず当たらない
  * （`docs/01-app/03-api-reference/01-directives/use-cache-remote.md`
  * 「cache keys have mostly unique values per request → cache utilization will be near-zero」）。
  * 送る前に格子へ吸着させて、取りうる URL の数を絞る。
  *
- * **DB を引かないのでクライアントからも読める。** 吸着はリクエストを組み立てる側、
- * つまりブラウザでやらないと URL が揃わない。lib/shelters.ts は prisma を引くので、
+ * 吸着はリクエストを組み立てる側、つまりブラウザでやらないと URL が揃わない。
+ * DB を引く側（src/server）に置くとクライアントから読めないので、
  * 格子まわりの計算だけこちらに分けてある。
  */
+
+export type LatLng = { lat: number; lng: number };
 
 export type Bbox = {
   west: number;
@@ -18,6 +21,9 @@ export type Bbox = {
   east: number;
   north: number;
 };
+
+/** 緯度1度あたりの距離（m）。経度は緯度によって縮むので後で補正する。 */
+const DEG_LAT_M = 111_320;
 
 export function clamp(n: number, min: number, max: number): number {
   return Math.min(Math.max(n, min), max);
@@ -86,12 +92,39 @@ export function snapCells(cells: number): number {
 }
 
 /**
- * 起点の座標を小数4桁（≒11m）に丸める。
+ * 座標を小数4桁（≒11m）に丸める。
  *
- * 拠点は固定点なので再訪・印刷・QR 共有で同じ URL が何度も来るが、現在地から
- * 引くときは毎回わずかに違う座標になる。11m 寄せれば同じ URL に落ちるし、
- * その差が最寄りの順位を変えることはない（元データの座標には小数2桁の行もある）。
+ * **丸める理由は2つあって、どちらもこの1つの関数で足りる。**
+ *
+ * 1. 起点から引く API のキャッシュ。拠点は固定点なので再訪・印刷・QR 共有で
+ *    同じ URL が何度も来るが、現在地から引くときは毎回わずかに違う座標になる。
+ *    11m 寄せれば同じ URL に落ちるし、その差が最寄りの順位を変えることはない
+ *    （元データの座標には小数2桁の行もある）
+ * 2. 拠点として URL に載せるとき。URL が短くなり、自宅の位置をそのままの精度で
+ *    配らずに済む（src/lib/places.ts）
  */
 export function roundCoord(n: number): number {
   return Math.round(n * 1e4) / 1e4;
+}
+
+/**
+ * 円を囲む矩形。索引（lat, lng）が効くのはこの部分だけ。
+ *
+ * 近い順の検索が「矩形で絞ってから円で切り直す」形をとるための、矩形のほう
+ * （src/server/nearby.ts）。純粋な計算なのでここに置く。
+ */
+export function bboxAround(center: LatLng, radiusM: number): Bbox {
+  const dLat = radiusM / DEG_LAT_M;
+
+  // 経度方向の補正は、中心ではなく矩形の**端**の緯度で取る。中心の緯度で割ると
+  // 極側の角が矩形からわずかにはみ出し、そこにある近い避難場所を取りこぼす。
+  const edgeLat = Math.min(Math.abs(center.lat) + dLat, 89);
+  const dLng = radiusM / (DEG_LAT_M * Math.cos((edgeLat * Math.PI) / 180));
+
+  return {
+    south: center.lat - dLat,
+    north: center.lat + dLat,
+    west: center.lng - dLng,
+    east: center.lng + dLng,
+  };
 }

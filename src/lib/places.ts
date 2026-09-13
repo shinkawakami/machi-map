@@ -1,5 +1,7 @@
+import { type LatLng, roundCoord } from "@/lib/geo";
+
 /**
- * 生活拠点（自宅・職場・実家・学校）の持ち方。
+ * 生活拠点（自宅・職場・実家・学校）の**値としての扱い**。
  *
  * **正本は URL。localStorage はキャッシュ。**
  * Safari の ITP は「7日間そのサイトに触らないと script から書いたストレージを消す」。
@@ -9,6 +11,10 @@
  *
  * サーバーには持たない。ログイン不要が守れるだけでなく、
  * 「自宅の位置」という重い情報を預からずに済む。
+ *
+ * **URL や localStorage を実際に読み書きするのは src/client/places-url.ts。**
+ * ここは文字列と値のあいだを行き来するだけにして、window に触らない
+ * （サーバー側の描画からも、テストからも素直に読めるようにするため）。
  */
 
 export type Place = { name: string; lat: number; lng: number };
@@ -25,14 +31,6 @@ export const MAX_PLACES = 6;
 export const PLACES_PARAM = "s";
 
 const MAX_NAME_LENGTH = 12;
-
-/**
- * 座標は小数4桁（約11m）に丸める。近い順は半径2kmから広げるので精度は足りる。
- * URL が短くなり、自宅の位置をそのままの精度で配らずに済む。
- */
-export function roundCoord(value: number): number {
-  return Math.round(value * 10_000) / 10_000;
-}
 
 /**
  * 拠点名から、URL の区切りに使う文字と、読めない文字を落とす。
@@ -66,6 +64,11 @@ export function decodePlaces(raw: string | null): Place[] {
   return places;
 }
 
+/**
+ * 座標は小数4桁（約11m）に丸める（src/lib/geo.ts の roundCoord）。
+ * 近い順は半径2kmから広げるので精度は足りるし、URL が短くなって、
+ * 自宅の位置をそのままの精度で配らずに済む。
+ */
 export function makePlace(
   name: string,
   lat: number,
@@ -85,79 +88,34 @@ export function samePlaces(a: Place[], b: Place[]): boolean {
 /** 同じ場所を2回保存させない。丸めたあとの座標で見る。 */
 export function findPlaceAt(
   places: Place[],
-  point: { lat: number; lng: number },
+  point: LatLng,
 ): Place | undefined {
   const lat = roundCoord(point.lat);
   const lng = roundCoord(point.lng);
   return places.find((p) => p.lat === lat && p.lng === lng);
 }
 
-// --- 以下はブラウザでのみ呼ぶ ---
-
-const STORAGE_KEY = "wagaya-nigesaki:places";
-
-/** キャッシュを読む。消えていること・読めないことを前提に、失敗は空で返す。 */
-export function readCachedPlaces(): Place[] {
-  try {
-    return decodePlaces(localStorage.getItem(STORAGE_KEY));
-  } catch {
-    return [];
-  }
-}
-
-export function writeCachedPlaces(places: Place[]): void {
-  try {
-    if (places.length === 0) localStorage.removeItem(STORAGE_KEY);
-    else localStorage.setItem(STORAGE_KEY, encodePlaces(places));
-  } catch {
-    // プライベートブラウジングなどで書けなくても、URL 側が正本なので困らない。
-  }
-}
-
 /**
- * 拠点は **URL のフラグメント（`#s=...`）に置く。クエリ（`?s=...`）ではない。**
+ * 拠点を **URL のフラグメント（`#s=...`）に置く。クエリ（`?s=...`）ではない。**
  *
  * フラグメントはサーバーに送られない。クエリに入れると、共有された URL を
  * 開いた時点でリクエスト行に自宅の座標が載り、ホスティングのアクセスログに残る。
  * 「サーバーに持たない」と言いながら、ログには持っていることになる。
  * 読むのはどのみちブラウザ側だけなので、送らない場所に置く。
+ *
+ * 名前は percent-encode しない。区切り文字は sanitizePlaceName で落としてある。
+ * **送られた側が URL の中身を読めるほうが、この題材では安全**なので。
  */
-export function readPlacesFromUrl(): Place[] {
-  return decodePlaces(readPlacesParam(window.location.hash));
+export function placesHash(places: Place[]): string {
+  return places.length ? `#${PLACES_PARAM}=${encodePlaces(places)}` : "";
 }
 
 /** `#s=自宅,35.6580,139.7016;…` から値だけ取り出す。 */
-function readPlacesParam(hash: string): string | null {
+export function readPlacesParam(hash: string): string | null {
   const raw = hash.startsWith("#") ? hash.slice(1) : hash;
   for (const part of raw.split("&")) {
     const [key, ...rest] = part.split("=");
     if (key === PLACES_PARAM) return decodeURIComponent(rest.join("="));
   }
   return null;
-}
-
-/** 共有・印刷で使うフラグメント。`#s=自宅,35.6580,139.7016` の形。 */
-export function placesHash(places: Place[]): string {
-  return places.length ? `#${PLACES_PARAM}=${encodePlaces(places)}` : "";
-}
-
-/** 家族に送る URL。いまのページではなく、必ず地図のトップを指す。 */
-export function shareUrl(places: Place[]): string {
-  return `${window.location.origin}/${placesHash(places)}`;
-}
-
-/**
- * URL を書き換える。履歴は積まない（戻るボタンで拠点が消えたり戻ったりすると、
- * 何が起きたのか分からなくなる）。
- *
- * 名前は percent-encode しない。区切り文字は sanitizePlaceName で落としてある。
- * **送られた側が URL の中身を読めるほうが、この題材では安全**なので。
- */
-export function syncUrl(places: Place[]): void {
-  const hash = places.length ? `#${PLACES_PARAM}=${encodePlaces(places)}` : "";
-  window.history.replaceState(
-    null,
-    "",
-    `${window.location.pathname}${window.location.search}${hash}`,
-  );
 }
