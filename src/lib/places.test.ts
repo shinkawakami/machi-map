@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 
 import {
   decodePlaces,
+  PLACE_PRESETS,
   encodePlaces,
   findPlaceAt,
   makePlace,
@@ -37,6 +38,18 @@ describe("sanitizePlaceName", () => {
   test("落とした結果が空になることがある（呼ぶ側が弾く）", () => {
     expect(sanitizePlaceName(",,,")).toBe("");
     expect(sanitizePlaceName("   ")).toBe("");
+  });
+});
+
+describe("MAX_PLACES", () => {
+  /*
+    **数字そのものではなく、数字の根拠を押さえる。** 上限は
+    「プリセット（自宅・職場・実家・学校）＋自分で決める1つ」で 5。
+    プリセットと同じ数まで下げると、**定番だけで埋まって
+    「祖母宅」のような1つを足せなくなる**。
+  */
+  test("プリセットを全部使っても、自由入力の枠が残る", () => {
+    expect(MAX_PLACES).toBeGreaterThan(PLACE_PRESETS.length);
   });
 });
 

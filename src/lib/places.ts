@@ -25,8 +25,19 @@ export type Place = { name: string; lat: number; lng: number };
  */
 export const PLACE_PRESETS = ["自宅", "職場", "実家", "学校"] as const;
 
-/** URL に載せる数。多すぎると URL が伸び、そもそも生活範囲の数でもない。 */
-export const MAX_PLACES = 6;
+/**
+ * URL に載せる拠点の数。**プリセット4つ＋自由入力1つ。**
+ *
+ * 多すぎると URL が伸びる。日本語の拠点名は percent-encode で1文字が9文字に
+ * 膨らむので効き方が急で、紙の QR もそのぶん大きくなる（DECISIONS.md の判断14）。
+ * かといって4では PLACE_PRESETS だけで埋まり、「祖母宅」のような1つを足せない。
+ *
+ * **6にしていた時期があるが、「4＋2」の2を説明できなかった。** 実際に測っても
+ * 3件→6件で URL 97→158字・紙の QR 31.5→40.2mm と連続的に増えるだけで、
+ * ここで壊れるというしきい値はどこにも無い。技術が決めてくれない数字なので、
+ * **説明できるほうを採る。**
+ */
+export const MAX_PLACES = 5;
 
 export const PLACES_PARAM = "s";
 
