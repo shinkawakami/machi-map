@@ -1,20 +1,28 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import AddressSearch from "@/components/AddressSearch";
 import ShelterDetailView from "@/components/ShelterDetailView";
 import ShelterFilterBar from "@/components/ShelterFilterBar";
 import { disasterLabel } from "@/lib/disasters";
+import { filterBadges } from "@/lib/filter-view";
 import { roundCoord } from "@/lib/grid";
 import { formatDistance } from "@/lib/format";
 import type { GeocodeHit } from "@/lib/geocode";
 import { kindOf } from "@/lib/kinds";
-import type { LatLng, NearbyItem, NearbyResult } from "@/lib/nearby";
+import type { LatLng, NearbyResult } from "@/lib/nearby";
 import type { PlaceSummary } from "@/lib/place-summary";
 import { MAX_PLACES, type Place } from "@/lib/places";
 import type { PlaceDetail } from "@/lib/shelter-detail";
 import type { ShelterFilter } from "@/lib/shelters";
+import {
+  groupSummaryRows,
+  groupTitle,
+  isFar,
+  NEARBY_LIMIT_M,
+  type SummaryGroup,
+} from "@/lib/summary-view";
 
 /**
  * 操作と結果をまとめて置くパネル。狭い画面では下のシート、広い画面では左の柱。
@@ -63,6 +71,8 @@ export default function ShelterPanel({
   onShow,
   onChangeFilter,
   onPickAddress,
+  onLocate,
+  locating,
   onSelectPlace,
   onRemovePlace,
   removedPlace,
@@ -86,6 +96,9 @@ export default function ShelterPanel({
   onShow: (state: "summary" | "list") => void;
   onChangeFilter: (next: ShelterFilter) => void;
   onPickAddress: (hit: GeocodeHit) => void;
+  /** 現在地を取る。起点がまだ無いときの案内から直接押せるようにするため */
+  onLocate: () => void;
+  locating: boolean;
   onSelectPlace: (place: Place) => void;
   onRemovePlace: (name: string) => void;
   /** 直前に消した拠点。しばらくは戻せるようにしておく */
@@ -101,6 +114,8 @@ export default function ShelterPanel({
   onShare: () => void;
   onFocus: (target: LatLng) => void;
 }) {
+  /** 起点がまだ無いときの案内から、住所の欄に焦点を渡すための参照 */
+  const searchRef = useRef<HTMLInputElement>(null);
   const reading = origin !== null && view.state !== "detail";
   /** いま見ている場所を拠点にできるか（すでに拠点なら出さない） */
   const showSave = reading && Boolean(onSavePlace);
@@ -119,31 +134,47 @@ export default function ShelterPanel({
         慣習でもあるし、場所を決め直すのに別の画面を経由させる必要がなくなる。
         地図に重ねないのは、操作をパネルに集める整理に合わせたため。
       */}
-      <div className="shrink-0 border-b border-zinc-100 px-3 py-2">
-        <div className="flex items-center gap-2">
-          {!collapsed && (
-            <div className="min-w-0 flex-1">
-              <AddressSearch onPick={onPickAddress} />
-            </div>
-          )}
-          {collapsed && (
-            <span className="min-w-0 flex-1 truncate text-xs font-semibold text-zinc-700">
-              {origin ? originLabel(origin) : TITLES.start}
-            </span>
-          )}
-          {/* 畳めるのは狭い画面だけ。広い画面では柱が常に出ている。 */}
+      {/*
+        畳む・開くのつまみ。畳めるのは狭い画面だけなので、広い画面では出さない。
+
+        **隅の「▼」1文字から、上端中央のつまみに変えた。** 下から出るシートの
+        つまみはこの位置にあるものとして触られるし、記号1つぶんしかなかった的が
+        シートの幅いっぱいになる。畳んだときは下の見出し行も押せるようにして、
+        **開く側の的をさらに大きく取る**（畳んだシートを開けないのがいちばん困る）。
+      */}
+      <button
+        type="button"
+        onClick={onToggleCollapsed}
+        aria-expanded={!collapsed}
+        aria-label={collapsed ? "パネルを開く" : "パネルを畳む"}
+        className="flex shrink-0 justify-center py-2 md:hidden"
+      >
+        <span
+          aria-hidden="true"
+          className="h-1 w-10 rounded-full bg-zinc-300"
+        />
+      </button>
+
+      <div className="shrink-0 border-b border-zinc-100 px-3 pb-2 md:pt-2">
+        {collapsed ? (
           <button
             type="button"
             onClick={onToggleCollapsed}
-            aria-expanded={!collapsed}
-            aria-label={collapsed ? "パネルを開く" : "パネルを畳む"}
-            className="shrink-0 rounded px-2 py-1 text-zinc-500 hover:text-zinc-900 md:hidden"
+            aria-expanded={false}
+            className="flex w-full items-center gap-2 py-1.5 text-left"
           >
-            {collapsed ? "▲" : "▼"}
+            <span className="min-w-0 flex-1 truncate text-xs font-semibold text-zinc-700">
+              {origin ? originLabel(origin) : TITLES.start}
+            </span>
+            <span className="shrink-0 text-[11px] text-zinc-500">開く</span>
           </button>
-        </div>
-        {!collapsed && locateError && (
-          <p className="mt-1 text-[11px] text-zinc-500">{locateError}</p>
+        ) : (
+          <>
+            <AddressSearch onPick={onPickAddress} inputRef={searchRef} />
+            {locateError && (
+              <p className="mt-1 text-[11px] text-zinc-500">{locateError}</p>
+            )}
+          </>
         )}
       </div>
 
@@ -162,7 +193,7 @@ export default function ShelterPanel({
                 <button
                   type="button"
                   onClick={() => onSelectPlace(place)}
-                  className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+                  className={`min-h-8 rounded-full border px-3 text-xs font-medium transition-colors ${
                     current
                       ? "border-amber-300 bg-amber-50 text-zinc-900"
                       : "border-zinc-300 text-zinc-700 hover:bg-zinc-50"
@@ -170,19 +201,24 @@ export default function ShelterPanel({
                 >
                   ★ {place.name}
                 </button>
-                <button
-                  type="button"
-                  aria-label={`${place.name}を削除`}
-                  onClick={() => onRemovePlace(place.name)}
-                  /*
-                    消す操作。指で押せる大きさ（24px）と、見える濃さにする。
-                    元は 16px 角・zinc-300（白地で 1.5:1）で、隣の拠点ボタンと
-                    紛れていた。戻せる（下の帯）とはいえ、当たりやすさの話は別。
-                  */
-                  className="flex size-6 shrink-0 items-center justify-center rounded text-[11px] text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900"
-                >
-                  ✕
-                </button>
+                {/*
+                  **消す口は、いま見ている拠点にだけ出す。**
+                  以前は全部の★の隣に常設していたので、いちばんよく押す操作
+                  （拠点の切り替え）のすぐ隣に、壊す操作が同じ大きさで並んでいた。
+                  切り替えは何度でもやり直せるが、削除はそうではない（戻せるのは
+                  帯が出ているあいだだけ）。**押し分けの難易度を、結果の重さに合わせる。**
+                  ほかの拠点を消すときは、いったんその拠点に切り替えてから。
+                */}
+                {current && (
+                  <button
+                    type="button"
+                    aria-label={`${place.name}を削除`}
+                    onClick={() => onRemovePlace(place.name)}
+                    className="flex size-8 shrink-0 items-center justify-center rounded text-[11px] text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900"
+                  >
+                    ✕
+                  </button>
+                )}
               </span>
             );
           })}
@@ -289,12 +325,17 @@ export default function ShelterPanel({
           初めて来た人が点を押すと、選択の輪だけが出て中身が出なかった。
         */}
         {!origin && view.state !== "detail" && (
-          <EmptyState hasPlaces={places.length > 0} />
+          <EmptyState
+            onLocate={onLocate}
+            locating={locating}
+            onEnterAddress={() => searchRef.current?.focus()}
+          />
         )}
         {origin && view.state === "summary" && (
           <SummaryTable
             key={originKey(origin)}
             origin={origin}
+            filter={filter}
             onFocus={onFocus}
           />
         )}
@@ -377,24 +418,58 @@ function QrIcon() {
   );
 }
 
-/** 起点がまだ無いときの中身。決め方は3つとも常設なので、ここでは道を示すだけ。 */
-function EmptyState({ hasPlaces }: { hasPlaces: boolean }) {
+/**
+ * 起点がまだ無いときの中身。
+ *
+ * **並べるのは箇条書きではなく、押せるもの。** 以前はここに 11px の「・」が4つ並び、
+ * しかもそのうち1つは「地図の右上「現在地」を押す」と**画面の別の場所を指していた**。
+ * 同じ重さの選択肢が4つ並ぶのは推奨が無いのと同じで、初めて来た人はそこで止まる。
+ *
+ * 押せるものを2つに絞る。現在地はその場で取れるので1タップで答えまで行き、
+ * 住所は上の欄に焦点を渡す（**別の場所を指すのではなく、そこへ連れていく**）。
+ * 地図を押す道も残っているが、これは案内が無くても触られるので1行に落とす。
+ *
+ * 拠点を持っている人はここへ来ない（1つ目の拠点が自動で起点になる）。
+ */
+function EmptyState({
+  onLocate,
+  locating,
+  onEnterAddress,
+}: {
+  onLocate: () => void;
+  locating: boolean;
+  onEnterAddress: () => void;
+}) {
   return (
     <div className="px-3 py-3">
       <p className="text-xs leading-relaxed text-zinc-600">
         いまは<span className="font-medium text-zinc-900">例として東京の地図</span>
-        を出しています。調べたい場所を決めると、そこから
-        <strong className="font-medium text-zinc-900">
-          災害の種類ごとに使える避難場所
-        </strong>
-        を出します。
+        を出しています。
+        <strong className="font-medium text-zinc-900">調べたい場所を決める</strong>
+        と、そこから災害の種類ごとに使える避難場所が出ます。
       </p>
-      <ul className="mt-2 flex flex-col gap-1.5 text-[11px] leading-relaxed text-zinc-600">
-        {hasPlaces && <li>・上の★から、保存した拠点を開く</li>}
-        <li>・上の検索に住所を入れる（町丁目まで）</li>
-        <li>・地図の右上「現在地」を押す</li>
-        <li>・地図を押す（遠いときは押すたびに寄ります）</li>
-      </ul>
+
+      <div className="mt-3 flex gap-2">
+        <button
+          type="button"
+          onClick={onLocate}
+          disabled={locating}
+          className="flex-1 rounded-lg bg-zinc-900 px-3 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-zinc-800 disabled:opacity-60"
+        >
+          {locating ? "取得中…" : "現在地から探す"}
+        </button>
+        <button
+          type="button"
+          onClick={onEnterAddress}
+          className="flex-1 rounded-lg border border-zinc-300 px-3 py-2.5 text-sm font-semibold text-zinc-800 transition-colors hover:bg-zinc-50"
+        >
+          住所を入れる
+        </button>
+      </div>
+
+      <p className="mt-2 text-[11px] leading-relaxed text-zinc-500">
+        地図を押して決めることもできます（遠いときは、押すたびに寄ります）。
+      </p>
     </div>
   );
 }
@@ -413,7 +488,12 @@ function Tab({
       type="button"
       aria-pressed={active}
       onClick={onClick}
-      className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
+      /*
+        **押して切り替わるものは、指で押せる大きさにする。**
+        11px・py-1 で実測 24px しかなく、地図右上の現在地ボタンを 40px に上げた
+        ときの基準（記号だけ・小さすぎる的をやめる）と食い違っていた。
+      */
+      className={`min-h-9 rounded-full px-3 text-xs font-medium transition-colors ${
         active
           ? "bg-zinc-900 text-white"
           : "border border-zinc-200 text-zinc-500 hover:text-zinc-900"
@@ -434,9 +514,12 @@ function Tab({
  */
 function SummaryTable({
   origin,
+  filter,
   onFocus,
 }: {
   origin: Origin | null;
+  /** 表には効かないが、効いていないことを言う必要があるかの判断に使う */
+  filter: ShelterFilter;
   onFocus: (target: LatLng) => void;
 }) {
   const [summary, setSummary] = useState<PlaceSummary | null>(null);
@@ -476,22 +559,39 @@ function SummaryTable({
   if (error) return <Message>{error}</Message>;
   if (!summary) return <Message>調べています…</Message>;
 
+  const groups = groupSummaryRows(summary.rows);
+  /** 「近くにありません」を1行でも出したか。出したときだけ、その意味を断る。 */
+  const explained = groups.some((group) => group.far || !group.item);
+
   return (
     <>
       {/*
         絞り込みバーはこの表の上にあるが、表はそれを見ない（8種すべてが並ぶこと
         自体が答えなので）。押しても表が動かない理由を、押す人の目の高さで言う。
+
+        **ただし、絞り込んでいるときだけ言う。** 既定は絞り込みなしなので、
+        常設すると**誰も食い違っていない場面で、全員がこの2行を読まされる**。
+        既定の初回表示でいちばん見てほしいのは下の表のほうで、その上に
+        断り書きを置く理由はない。食い違いが起きた人にだけ、その場で言う。
       */}
-      <p className="border-b border-zinc-100 px-3 py-1.5 text-[11px] leading-relaxed text-zinc-500">
-        この表は絞り込みの対象外です（8種すべてを出します）。上の絞り込みは地図に効きます。
-      </p>
+      {filterBadges(filter).length > 0 && (
+        <p className="border-b border-zinc-100 px-3 py-1.5 text-[11px] leading-relaxed text-zinc-500">
+          絞り込んでいても、この表は8種すべてを出します
+          （絞り込みは地図と「近い順」に効きます）。
+        </p>
+      )}
+      {/*
+        **8行ではなく、行き先の数だけ並ぶ。** 同じ施設に落ちた災害は1行に束ねる
+        （lib/summary-view.ts）。上から近い順なので、読み始めた行がそのまま答えになり、
+        「近くにありません」は下にまとまる。
+      */}
       <ul className="divide-y divide-zinc-100">
-        {summary.rows.map((row) => (
-          <li key={row.disaster}>
-            <SummaryRowView
-              label={disasterLabel(row.disaster)}
-              item={row.nearest}
-              open={row.nearest?.id === openId}
+        {groups.map((group) => (
+          <li key={group.item?.id ?? "missing"}>
+            <SummaryGroupView
+              title={groupTitle(group)}
+              group={group}
+              open={Boolean(group.item) && group.item?.id === openId}
               onToggle={setOpenId}
               onFocus={onFocus}
             />
@@ -507,10 +607,15 @@ function SummaryTable({
         <p className="px-3 pt-2 text-[11px] text-zinc-500">
           災害がおさまったあと、生活する場所（{kindOf("SHELTER").label}）
         </p>
-        <SummaryRowView
-          label="最寄り"
-          item={summary.shelter}
-          open={summary.shelter?.id === openId}
+        <SummaryGroupView
+          // 上の1行が名乗っているので、行の見出しは要らない。
+          title={null}
+          group={{
+            disasters: [],
+            item: summary.shelter,
+            far: summary.shelter ? isFar(summary.shelter) : false,
+          }}
+          open={Boolean(summary.shelter) && summary.shelter?.id === openId}
           onToggle={setOpenId}
           onFocus={onFocus}
         />
@@ -519,33 +624,54 @@ function SummaryTable({
       <p className="px-3 py-2 text-[11px] leading-relaxed text-zinc-500">
         半径{Math.round(summary.radiusM / 1000)}km まで探しました。
         距離は直線距離で、実際の道のりではありません。
-        {summary.incomplete &&
-          "見つからなかった災害は、この付近にその災害で使える指定がありません。"}
+        {explained &&
+          `「近くにありません」は、${NEARBY_LIMIT_M / 1000}km 以内に、その災害で使える指定が無いという意味です。`}
       </p>
     </>
   );
 }
 
-function SummaryRowView({
-  label,
-  item,
+/**
+ * 表の1行。**「見つかった／見つからない」ではなく「逃げ先になる／ならない」で分ける。**
+ *
+ * 半径のはしごは 256km まで伸びるので、その災害の指定が自分の市町村に無いと、
+ * 遠くの市町村の指定が最寄りとして返ってくる。それを 500m の小学校と同じ書式で並べると、
+ * 表が答えの顔をしたまま嘘をつく。遠いものは名前を主役から降ろし、
+ * 「近くにありません」と言い切ったうえで、どこにあるかだけ添える（lib/summary-view.ts）。
+ */
+function SummaryGroupView({
+  title,
+  group,
   open,
   onToggle,
   onFocus,
 }: {
-  label: string;
-  item: NearbyItem | null;
+  /** 行の見出し。指定避難所の行のように、上の見出しで足りるときは null */
+  title: string | null;
+  group: SummaryGroup;
   open: boolean;
   onToggle: (id: string | null) => void;
   onFocus: (target: LatLng) => void;
 }) {
+  const { item, far } = group;
+  const heading = title && (
+    <span className="block text-xs font-semibold text-zinc-900">{title}</span>
+  );
+
+  // 押す先が無いので、ボタンにしない。
   if (!item) {
     return (
-      <div className="flex items-start gap-2.5 px-3 py-2.5">
-        <span className="w-16 shrink-0 text-xs font-semibold text-zinc-900">
-          {label}
-        </span>
-        <span className="text-xs text-zinc-500">見つかりませんでした</span>
+      <div className="px-3 py-2.5">
+        {heading}
+        <p className={`flex items-center gap-1.5 ${title ? "mt-1" : ""}`}>
+          <MissingDot />
+          <span className="text-sm font-semibold text-zinc-900">
+            近くにありません
+          </span>
+        </p>
+        <p className="mt-0.5 text-xs leading-relaxed text-zinc-600">
+          探した範囲に、その災害で使える指定がありませんでした。
+        </p>
       </div>
     );
   }
@@ -559,31 +685,55 @@ function SummaryRowView({
           onFocus(item);
           onToggle(open ? null : item.id);
         }}
-        className={`flex w-full items-start gap-2.5 px-3 py-2.5 text-left hover:bg-zinc-50 ${
+        className={`block w-full px-3 py-2.5 text-left hover:bg-zinc-50 ${
           open ? "bg-zinc-50" : ""
         }`}
       >
-        <span className="w-16 shrink-0 pt-0.5 text-xs font-semibold text-zinc-900">
-          {label}
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="flex items-center gap-1.5">
+        {heading}
+        <span className={`flex items-center gap-1.5 ${title ? "mt-1" : ""}`}>
+          {far ? (
+            <MissingDot />
+          ) : (
             <span
               className="size-2 shrink-0 rounded-full"
               style={{ backgroundColor: kindOf(item.kind).color }}
             />
-            <span className="truncate text-sm text-zinc-900">{item.name}</span>
+          )}
+          <span className="min-w-0 flex-1 truncate text-sm font-semibold text-zinc-900">
+            {far ? "近くにありません" : item.name}
           </span>
-          <span className="mt-0.5 block truncate text-xs text-zinc-500">
-            {item.address}
-          </span>
+          {/* 遠い行の距離は答えの顔をさせない。下の1行に回す。 */}
+          {!far && (
+            <span className="shrink-0 text-xs font-semibold text-zinc-900 tabular-nums">
+              {formatDistance(item.distanceM)}
+            </span>
+          )}
         </span>
-        <span className="w-12 shrink-0 pt-0.5 text-right text-xs font-semibold text-zinc-900 tabular-nums">
-          {formatDistance(item.distanceM)}
+        <span
+          className={`mt-0.5 block truncate text-xs ${
+            far ? "text-zinc-600" : "text-zinc-500"
+          }`}
+        >
+          {far
+            ? `最寄りは${formatDistance(item.distanceM)}先の${item.name}`
+            : item.address}
         </span>
       </button>
       {open && <InlineDetail id={item.id} />}
     </>
+  );
+}
+
+/**
+ * 逃げ先が無い行の印。避難場所の点（塗りつぶしの丸）と同じ位置・同じ大きさの
+ * 輪郭だけの丸にして、「ここに入るものが無い」ことを列の中で見せる。
+ */
+function MissingDot() {
+  return (
+    <span
+      aria-hidden="true"
+      className="size-2 shrink-0 rounded-full border border-zinc-400"
+    />
   );
 }
 
@@ -654,6 +804,12 @@ function NearbyList({
       <ul className="divide-y divide-zinc-100">
         {result.items.map((item) => (
           <li key={item.id}>
+            {/*
+              **災害別の表と同じ組みにする。** 以前はここだけ距離が左端にあり、
+              タブを行き来するたびに同じ数字を逆の端で探すことになっていた。
+              近い順は距離を縦に読む一覧なので左端にも理はあるが、
+              2つの面を往復する作りである以上、そろっているほうが効く。
+            */}
             <button
               type="button"
               aria-expanded={item.id === openId}
@@ -661,46 +817,44 @@ function NearbyList({
                 onFocus(item);
                 setOpenId(item.id === openId ? null : item.id);
               }}
-              className={`flex w-full items-start gap-2.5 px-3 py-2.5 text-left hover:bg-zinc-50 ${
+              className={`block w-full px-3 py-2.5 text-left hover:bg-zinc-50 ${
                 item.id === openId ? "bg-zinc-50" : ""
               }`}
             >
-              <span className="w-12 shrink-0 pt-0.5 text-right text-xs font-semibold text-zinc-900 tabular-nums">
-                {formatDistance(item.distanceM)}
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="flex items-center gap-1.5">
-                  {/*
-                    同じ場所に両方の指定があるときは、地図の二色の点と同じ見た目
-                    （橙の芯＋青いリング）にする。色は増やさない。
-                  */}
-                  <span
-                    className="size-2 shrink-0 rounded-full"
-                    style={{
-                      backgroundColor: kindOf(item.kind).color,
-                      boxShadow: item.alsoKind
-                        ? `0 0 0 2px ${kindOf(item.alsoKind).color}`
-                        : undefined,
-                    }}
-                  />
-                  <span className="truncate text-sm text-zinc-900">
-                    {item.name}
+              <span className="flex items-center gap-1.5">
+                {/*
+                  同じ場所に両方の指定があるときは、地図の二色の点と同じ見た目
+                  （橙の芯＋青いリング）にする。色は増やさない。
+                */}
+                <span
+                  className="size-2 shrink-0 rounded-full"
+                  style={{
+                    backgroundColor: kindOf(item.kind).color,
+                    boxShadow: item.alsoKind
+                      ? `0 0 0 2px ${kindOf(item.alsoKind).color}`
+                      : undefined,
+                  }}
+                />
+                <span className="min-w-0 flex-1 truncate text-sm font-semibold text-zinc-900">
+                  {item.name}
+                </span>
+                {/*
+                  記号だけにしない。二色の点は凡例を知らないと読めないので、
+                  もう一方の指定があることは文字でも書く。
+                */}
+                {item.alsoKind && (
+                  <span className="shrink-0 rounded-full border border-zinc-300 px-1.5 text-[10px] text-zinc-600">
+                    {kindOf(item.alsoKind).shortLabel}も
                   </span>
-                  {/*
-                    記号だけにしない。二色の点は凡例を知らないと読めないので、
-                    もう一方の指定があることは文字でも書く。
-                  */}
-                  {item.alsoKind && (
-                    <span className="shrink-0 rounded-full border border-zinc-300 px-1.5 text-[10px] text-zinc-600">
-                      {kindOf(item.alsoKind).shortLabel}も
-                    </span>
-                  )}
+                )}
+                <span className="shrink-0 text-xs font-semibold text-zinc-900 tabular-nums">
+                  {formatDistance(item.distanceM)}
                 </span>
-                <span className="mt-0.5 block truncate text-xs text-zinc-500">
-                  {item.disasters === null
-                    ? "災害種別の指定なし"
-                    : item.disasters.map((d) => disasterLabel(d)).join("・")}
-                </span>
+              </span>
+              <span className="mt-0.5 block truncate text-xs text-zinc-500">
+                {item.disasters === null
+                  ? "災害種別の指定なし"
+                  : item.disasters.map((d) => disasterLabel(d)).join("・")}
               </span>
             </button>
             {item.id === openId && <InlineDetail id={item.id} />}

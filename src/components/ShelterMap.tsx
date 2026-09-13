@@ -24,6 +24,7 @@ import ShelterPanel, {
   type Origin,
   type PanelView,
 } from "@/components/ShelterPanel";
+import { filterBadges } from "@/lib/filter-view";
 import { snapBbox, snapCells } from "@/lib/grid";
 import { kindOf } from "@/lib/kinds";
 import type { LatLng } from "@/lib/nearby";
@@ -895,7 +896,7 @@ export default function ShelterMap() {
           操作ボタンは置かない（操作はパネルに集めた）。
         */}
         <div className="pointer-events-none absolute inset-x-0 top-0 flex flex-col items-start gap-2 p-3 md:pl-[21rem] lg:pl-[25rem]">
-          <StatusChip status={status} />
+          <MapChips status={status} filter={filter} />
         </div>
 
         {/*
@@ -1004,6 +1005,8 @@ export default function ShelterMap() {
           onShow={(state) => setView({ state })}
           onChangeFilter={setFilter}
           onPickAddress={pickAddress}
+          onLocate={locate}
+          locating={locating}
           onSelectPlace={selectPlace}
           onRemovePlace={(name) => {
             const place = places.find((p) => p.name === name);
@@ -1231,30 +1234,50 @@ function pinElement(): HTMLElement {
   return el;
 }
 
-function StatusChip({ status }: { status: Status }) {
+/**
+ * 地図に重ねる状態の表示。**操作は置かない**（操作はパネルに集めてある）。
+ *
+ * 絞り込んでいるあいだは、件数ではなく**何で絞っているか**を出す。
+ * 絞り込みの操作はパネルの中にしかないので、狭い画面で畳むとバーごと消え、
+ * 点が減っている理由が画面のどこにも出なくなっていた（lib/filter-view.ts）。
+ * 件数と入れ替えるのは、絞り込み中はその数字こそ説明を要するため。
+ */
+function MapChips({
+  status,
+  filter,
+}: {
+  status: Status;
+  filter: ShelterFilter;
+}) {
+  const badges = filterBadges(filter);
+
   // 広すぎるときは、隅のチップではなく地図の中央の案内で言う。
   if (status.state === "tooWide") return null;
-  if (status.state === "loading") {
-    return <Chip>読み込み中…</Chip>;
-  }
-  if (status.state === "error") {
-    return <Chip>{status.message}</Chip>;
-  }
 
-  const { result } = status;
   return (
-    /*
-      **「この範囲に」とは言えなくなった。** 問い合わせる矩形は格子に吸着させて
-      あり、画面より少し広い（lib/grid.ts の snapBbox）。数えているのもその矩形の
-      中なので、見えている範囲ぴったりの数ではない。数字を画面に合わせて数え直す
-      手もあるが、クラスタで返ってきたときは手元に点が無いので数えられない。
-      **言い方のほうを実際に合わせる。**
-    */
-    <Chip>
-      このあたりに <strong className="font-semibold">
-        {result.total.toLocaleString("ja-JP")}
-      </strong> 件
-    </Chip>
+    <>
+      {badges.map((badge) => (
+        <Chip key={badge.key}>
+          <span className="font-medium">{badge.label}</span>
+        </Chip>
+      ))}
+      {status.state === "loading" && <Chip>読み込み中…</Chip>}
+      {status.state === "error" && <Chip>{status.message}</Chip>}
+      {/*
+        **「この範囲に」とは言えなくなった。** 問い合わせる矩形は格子に吸着させて
+        あり、画面より少し広い（lib/grid.ts の snapBbox）。数えているのもその矩形の
+        中なので、見えている範囲ぴったりの数ではない。数字を画面に合わせて数え直す
+        手もあるが、クラスタで返ってきたときは手元に点が無いので数えられない。
+        **言い方のほうを実際に合わせる。**
+      */}
+      {status.state === "ready" && badges.length === 0 && (
+        <Chip>
+          このあたりに <strong className="font-semibold">
+            {status.result.total.toLocaleString("ja-JP")}
+          </strong> 件
+        </Chip>
+      )}
+    </>
   );
 }
 

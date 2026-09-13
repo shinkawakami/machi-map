@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore } from "react";
 
 import PrintSheet from "@/components/PrintSheet";
-import { shareUrl } from "@/lib/places";
+import { placesHash, shareUrl } from "@/lib/places";
 import {
   getServerUrlPlaces,
   getUrlPlaces,
@@ -24,6 +24,12 @@ export default function PrintPage() {
     getUrlPlaces,
     getServerUrlPlaces,
   );
+  /**
+   * 表が全部そろったか。**そろうまで刷らせない。**
+   * 取得の途中で押せると「調べています…」がそのまま紙に出る。
+   */
+  const [ready, setReady] = useState(false);
+  const canPrint = ready && places.length > 0;
 
   return (
     <div className="min-h-dvh overflow-y-auto bg-white">
@@ -37,15 +43,19 @@ export default function PrintPage() {
         <button
           type="button"
           onClick={() => window.print()}
-          className="ml-auto rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white"
+          disabled={!canPrint}
+          className="ml-auto min-h-9 rounded-lg bg-zinc-900 px-3 text-xs font-medium text-white disabled:opacity-50"
         >
-          印刷する
+          {ready ? "印刷する" : "調べています…"}
         </button>
       </div>
 
       <PrintSheet
+        // 拠点が入れ替わったら作り直す（取得済みの表を引きずらない）。
+        key={placesHash(places)}
         places={places}
         url={places.length ? shareUrl(places) : ""}
+        onReady={setReady}
       />
     </div>
   );

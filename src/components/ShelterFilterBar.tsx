@@ -92,7 +92,8 @@ export default function ShelterFilterBar({
               aria-disabled={last}
               title={last ? "どちらかは表示します" : kind.description}
               onClick={() => toggleKind(kind.key)}
-              className={`flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
+              // 押して切り替わるものは指で押せる大きさに（横は詰まっているので縦だけ）。
+              className={`flex min-h-8 items-center gap-1 rounded-full border px-2.5 text-[11px] transition-colors ${
                 on
                   ? "border-zinc-300 bg-zinc-100 font-medium text-zinc-900"
                   : "border-zinc-200 bg-white text-zinc-500"
@@ -118,7 +119,7 @@ export default function ShelterFilterBar({
           className="group relative ml-auto"
         >
           <summary
-            className={`cursor-pointer list-none rounded-full border px-2.5 py-1 text-[11px] marker:content-none ${
+            className={`flex min-h-8 cursor-pointer list-none items-center rounded-full border px-2.5 text-[11px] marker:content-none ${
               selected
                 ? "border-zinc-900 bg-zinc-900 font-medium text-white"
                 : "border-zinc-200 text-zinc-500"
@@ -153,15 +154,22 @@ export default function ShelterFilterBar({
               ))}
             </div>
 
-            {/*
-              指定避難所に災害種別の指定は存在しない。黙って全部残すと
-              「洪水で使える避難所」だと読まれてしまうので、そのときだけ断る。
-            */}
-            {value.disaster && shelterVisible && (
-              <p className="mt-2 border-t border-zinc-100 pt-2 text-[11px] leading-snug text-zinc-500">
-                {KINDS[1].label}には災害種別の指定がないため、絞り込みの対象外です
-              </p>
-            )}
+            <div className="mt-2 border-t border-zinc-100 pt-2 text-[11px] leading-snug text-zinc-500">
+              {/*
+                **どこに効くのかは、押す前に言う。** 効かない画面（災害別の表）の
+                上に断り書きを常設するより、操作する場所で先に言うほうが早い。
+              */}
+              <p>絞り込みは地図と「近い順」に効きます（災害別の表は8種すべて）。</p>
+              {/*
+                指定避難所に災害種別の指定は存在しない。黙って全部残すと
+                「洪水で使える避難所」だと読まれてしまうので、そのときだけ断る。
+              */}
+              {value.disaster && shelterVisible && (
+                <p className="mt-1">
+                  {KINDS[1].label}には災害種別の指定がないため、絞り込みの対象外です
+                </p>
+              )}
+            </div>
           </div>
         </details>
       </div>
@@ -193,7 +201,7 @@ function DisasterChip({
       aria-pressed={selected}
       title={title}
       onClick={onClick}
-      className={`shrink-0 rounded-full border px-2.5 py-1 text-[11px] whitespace-nowrap transition-colors ${
+      className={`min-h-8 shrink-0 rounded-full border px-2.5 text-[11px] whitespace-nowrap transition-colors ${
         selected
           ? "border-zinc-900 bg-zinc-900 font-medium text-white"
           : "border-zinc-200 bg-white text-zinc-600"

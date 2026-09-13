@@ -24,6 +24,23 @@ export default function SavePlaceDialog({
 }) {
   const [custom, setCustom] = useState("");
   const cleaned = sanitizePlaceName(custom);
+  /**
+   * 置き換えの確認を待っている名前。
+   *
+   * **同じ名前で保存すると、前の座標は黙って消える**（savePlace は名前が鍵）。
+   * 拠点の削除には戻す帯があるのに、上書きには何も無かった。「上書き」と
+   * 小さく添えるだけでは、押したあとに気づいても遅い。**押す前に一度止める。**
+   * 止めるのは置き換わるときだけで、新しい名前は今までどおり1タップで保存できる。
+   */
+  const [confirming, setConfirming] = useState<string | null>(null);
+
+  const choose = (name: string) => {
+    if (!usedNames.includes(name) || confirming === name) {
+      onSave(name);
+      return;
+    }
+    setConfirming(name);
+  };
 
   return (
     <Modal label="この場所を拠点として保存します" onClose={onCancel}>
@@ -40,29 +57,57 @@ export default function SavePlaceDialog({
           <button
             key={preset}
             type="button"
-            onClick={() => onSave(preset)}
-            className="rounded-full border border-zinc-300 px-3 py-1.5 text-sm text-zinc-800 transition-colors hover:bg-zinc-50"
+            onClick={() => choose(preset)}
+            className={`min-h-9 rounded-full border px-3 text-sm transition-colors ${
+              confirming === preset
+                ? "border-amber-400 bg-amber-50 font-semibold text-zinc-900"
+                : "border-zinc-300 text-zinc-800 hover:bg-zinc-50"
+            }`}
           >
             {preset}
             {usedNames.includes(preset) && (
-              <span className="ml-1 text-[10px] text-zinc-500">上書き</span>
+              <span className="ml-1 text-[10px] text-zinc-500">
+                {confirming === preset ? "もう一度" : "上書き"}
+              </span>
             )}
           </button>
         ))}
       </div>
 
-      <div className="mt-3 flex items-center gap-1.5">
+      {confirming && (
+        <p role="status" className="mt-1.5 text-[11px] leading-relaxed text-zinc-700">
+          いまの「{confirming}」は、この場所に置き換わります。
+          続けるなら、もう一度押してください。
+        </p>
+      )}
+
+      {/*
+        **入力欄は 16px を下回らせない。** これより小さいと、触れた瞬間に
+        iOS Safari がページごと拡大する（AddressSearch に同じ注記がある）。
+        ここはダイアログの中なので、拡大されると背後との位置関係まで崩れる。
+        高さは伸びるが、名前を打つ欄としてはこのくらいが素直。
+      */}
+      <div className="mt-3 flex gap-1.5">
         <input
           value={custom}
-          onChange={(e) => setCustom(e.target.value)}
+          onChange={(e) => {
+            setCustom(e.target.value);
+            setConfirming(null);
+          }}
+          onKeyDown={(event) => {
+            // 変換中の Enter は IME のもの。名前に漢字を使えなくしない。
+            if (event.nativeEvent.isComposing) return;
+            if (event.key === "Enter" && cleaned) choose(cleaned);
+          }}
           placeholder="ほかの名前"
           maxLength={12}
-          className="min-w-0 flex-1 rounded-lg border border-zinc-200 px-2 py-1.5 text-sm text-zinc-900 placeholder:text-zinc-500"
+          enterKeyHint="done"
+          className="min-w-0 flex-1 rounded-lg border border-zinc-200 px-2 py-1.5 text-base text-zinc-900 placeholder:text-zinc-500"
         />
         <button
           type="button"
           disabled={!cleaned}
-          onClick={() => onSave(cleaned)}
+          onClick={() => choose(cleaned)}
           className="shrink-0 rounded-lg bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
         >
           保存

@@ -12,6 +12,11 @@ import { KINDS } from "@/lib/kinds";
  * 2回目以降の利用者には読まれずに邪魔になるだけ。読んだら閉じられて、
  * ヘッダの「？」でいつでも戻せる形にした。
  *
+ * **中身は削ったが、言うことは減らしていない。** 「5秒で渡す」と書いておきながら
+ * 本文が 300 字あり、いちばん最初に出る画面でそれを読ませていた。
+ * 落としたのは操作の説明（絞り込みの使い方）と重複した言い回しで、
+ * 主張2つ・凡例・拠点でできること・データの限界は残している。
+ *
  * 閉じたことは localStorage に持つ。サーバー側では読めないので、素直に書くと
  * 2回目以降の利用者に「カードが出てから消える」ちらつきが出る。
  * 描画前に走るインラインスクリプトで隠しておく（Next.js の
@@ -105,8 +110,7 @@ export default function IntroCard() {
                   避難場所は、災害の種類ごとに使える・使えないが分かれています。
                 </span>
                 <br />
-                洪水では使えない場所があります。「災害で絞る」から災害を選ぶと、
-                その災害で使える場所だけが地図に残ります。
+                洪水では使えない場所があります。
               </li>
               <li>
                 <span className="font-semibold text-zinc-900">
@@ -138,20 +142,18 @@ export default function IntroCard() {
                 自宅・職場を「拠点」として保存できます。
               </span>
               <br />
-              拠点ごとに「8種の災害 × それぞれの最寄り」が1枚の表になります。
-              保存した拠点は URL に入るので、ログインなしで家族に送れて、
-              QR コードで紙に出して貼っておけます。
+              拠点ごとの表が1枚できて、URL で家族に送れます（ログイン不要）。
+              紙にも出せます。
             </p>
 
             <p className="mt-3 border-t border-zinc-100 pt-3 text-[11px] leading-relaxed text-zinc-500">
-              データは市町村が登録し公開に同意したものに限られます
-              （最下部の注意書きを参照してください）。
+              データは市町村が公開に同意したものに限られます（下の出典と注意書きを参照）。
             </p>
 
             <button
               type="button"
               onClick={close}
-              className="mt-3 w-full rounded-lg bg-zinc-900 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-800"
+              className="mt-3 min-h-11 w-full rounded-lg bg-zinc-900 px-3 text-sm font-medium text-white transition-colors hover:bg-zinc-800"
             >
               地図を見る
             </button>

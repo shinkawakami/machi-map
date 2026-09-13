@@ -64,6 +64,24 @@ export default function ShelterDetailView({
           {detail.name}
         </h2>
         <p className="mt-0.5 text-xs text-zinc-500">{detail.address}</p>
+        {/*
+          **調べた先と、実際に行くことのあいだを埋める。**
+          このアプリが出せるのは直線距離までで、川や崖を挟んでいても短く出る。
+          そこから先（どの道を通るか）は地図アプリの仕事なので、渡してしまう。
+
+          外部の地図サービスへ**座標を渡して開くだけ**のリンクで、API も鍵も使わない
+          （住所検索で外部 API を避けたのは規約の判断が戻ってくるためで、
+          この種のリンクはその話とは別）。徒歩を指定するのは、緊急避難場所へ
+          向かう手段が原則として徒歩だから。
+        */}
+        <a
+          href={`https://www.google.com/maps/dir/?api=1&destination=${detail.lat},${detail.lng}&travelmode=walking`}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-2 inline-flex min-h-8 items-center rounded-full border border-zinc-300 px-3 text-xs font-medium text-zinc-800 transition-colors hover:bg-zinc-50"
+        >
+          徒歩の経路を見る（Google マップ）↗
+        </a>
         {/* 畳んだ1行が自分で名乗るので、そのときはこの断りは要らない。 */}
         {full.length > 1 && (
           <p className="mt-1 text-xs leading-relaxed text-zinc-600">

@@ -3,13 +3,18 @@
 import { useEffect, useState } from "react";
 
 import QrCode from "@/components/QrCode";
-import { disasterLabel } from "@/lib/disasters";
 import { formatDistance } from "@/lib/format";
 import { roundCoord } from "@/lib/grid";
 import { kindOf } from "@/lib/kinds";
 import type { NearbyItem } from "@/lib/nearby";
 import type { PlaceSummary } from "@/lib/place-summary";
 import type { Place } from "@/lib/places";
+import {
+  groupSummaryRows,
+  groupTitle,
+  isFar,
+  NEARBY_LIMIT_M,
+} from "@/lib/summary-view";
 
 /**
  * 拠点ごとの「8種 × 最寄り」を紙に出す。
@@ -20,14 +25,71 @@ import type { Place } from "@/lib/places";
  *
  * QR も一緒に刷る。紙から戻ってこられないと、更新のたびに刷り直しになる。
  */
+/** 1拠点ぶんの取得結果。読み終えるまでは配列そのものが無い。 */
+type Loaded = { summary: PlaceSummary | null; error: string | null };
+
 export default function PrintSheet({
   places,
   url,
+  onReady,
 }: {
   places: Place[];
   /** 拠点が入った URL。QR の中身 */
   url: string;
+  /**
+   * 全部の拠点を引き終えたか。**紙は刷り直しがきかない**ので、
+   * 取得の途中で「印刷する」を押せると「調べています…」がそのまま紙に出る。
+   * ボタンを持っているのはページ側なので、状態だけ渡す。
+   */
+  onReady?: (ready: boolean) => void;
 }) {
+  /*
+    取得は**ここでまとめてやる**（拠点ごとの表に散らさない）。
+    散らしたままだと「全部終わったか」を誰も知らず、ページ側のボタンを
+    止められなかった。並列に投げるのは変わらない。
+
+    拠点が入れ替わったときの取り直しは、ページ側が key を替えて作り直す。
+    ここで results を null に戻すと、effect の中の setState になる。
+  */
+  const [results, setResults] = useState<Loaded[] | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let cancelled = false;
+
+    void (async () => {
+      const loaded = await Promise.all(
+        places.map(async (place): Promise<Loaded> => {
+          try {
+            // 画面で見たときと同じ URL になるよう、同じ丸めを通す（lib/grid.ts）。
+            const res = await fetch(
+              `/api/shelters/summary?lat=${roundCoord(place.lat)}&lng=${roundCoord(place.lng)}`,
+              { signal: controller.signal },
+            );
+            if (!res.ok) throw new Error(`API が ${res.status} を返しました`);
+            return { summary: (await res.json()) as PlaceSummary, error: null };
+          } catch (e) {
+            return {
+              summary: null,
+              error: e instanceof Error ? e.message : "読み込みに失敗しました",
+            };
+          }
+        }),
+      );
+      if (!cancelled) setResults(loaded);
+    })();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [places]);
+
+  // 1件でも落ちたときは、落ちたことごと刷る。待ち続けても紙は出ない。
+  useEffect(() => {
+    onReady?.(results !== null);
+  }, [results, onReady]);
+
   return (
     <div className="mx-auto max-w-3xl px-5 py-6 print:px-0 print:py-0">
       <header className="flex items-start gap-4 border-b border-zinc-300 pb-3">
@@ -56,7 +118,9 @@ export default function PrintSheet({
           拠点が入っていません。地図で拠点を保存してから、もう一度開いてください。
         </p>
       ) : (
-        places.map((place) => <PlaceTable key={place.name} place={place} />)
+        places.map((place, index) => (
+          <PlaceTable key={place.name} place={place} result={results?.[index]} />
+        ))
       )}
 
       <footer className="mt-6 border-t border-zinc-300 pt-2 text-[10px] leading-relaxed text-zinc-500">
@@ -64,35 +128,22 @@ export default function PrintSheet({
         「位置参照情報ダウンロードサービス」（国土交通省）をもとに作成。
         データは市町村が登録し公開に同意したものに限られ、最新でない場合や未掲載の場合があります。
         距離は直線距離で、実際の道のりではありません。
+        「近くにありません」は、{NEARBY_LIMIT_M / 1000}km 以内にその災害で使える指定が無いという意味です。
       </footer>
     </div>
   );
 }
 
-function PlaceTable({ place }: { place: Place }) {
-  const [summary, setSummary] = useState<PlaceSummary | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const controller = new AbortController();
-
-    (async () => {
-      try {
-        // 画面で見たときと同じ URL になるよう、同じ丸めを通す（lib/grid.ts）。
-        const res = await fetch(
-          `/api/shelters/summary?lat=${roundCoord(place.lat)}&lng=${roundCoord(place.lng)}`,
-          { signal: controller.signal },
-        );
-        if (!res.ok) throw new Error(`API が ${res.status} を返しました`);
-        setSummary(await res.json());
-      } catch (e) {
-        if (controller.signal.aborted) return;
-        setError(e instanceof Error ? e.message : "読み込みに失敗しました");
-      }
-    })();
-
-    return () => controller.abort();
-  }, [place.lat, place.lng]);
+function PlaceTable({
+  place,
+  result,
+}: {
+  place: Place;
+  /** まだ読み終えていなければ undefined */
+  result?: Loaded;
+}) {
+  const summary = result?.summary ?? null;
+  const error = result?.error ?? null;
 
   return (
     /* 拠点は紙の途中で割らない。1枚に1拠点でなくてよいが、表は切らない。 */
@@ -105,28 +156,31 @@ function PlaceTable({ place }: { place: Place }) {
       </h2>
 
       {error && <p className="mt-2 text-xs text-zinc-500">{error}</p>}
-      {!error && !summary && (
-        <p className="mt-2 text-xs text-zinc-500">調べています…</p>
-      )}
+      {!result && <p className="mt-2 text-xs text-zinc-500">調べています…</p>}
 
       {summary && (
         <>
           <table className="mt-2 w-full border-collapse text-left text-xs">
             <thead>
               <tr className="border-y border-zinc-300 text-[10px] text-zinc-500">
-                <th className="w-24 py-1 font-medium">災害</th>
+                <th className="w-40 py-1 font-medium">災害</th>
                 <th className="py-1 font-medium">
                   逃げ先（{kindOf("EMERGENCY").label}）
                 </th>
                 <th className="w-14 py-1 text-right font-medium">距離</th>
               </tr>
             </thead>
+            {/*
+              画面と同じく、同じ施設に落ちた災害は1行に束ねる（lib/summary-view.ts）。
+              紙は戻って確かめられないぶん、同じ名前が8回並ぶ表はなお読みにくい。
+            */}
             <tbody>
-              {summary.rows.map((row) => (
+              {groupSummaryRows(summary.rows).map((group) => (
                 <Row
-                  key={row.disaster}
-                  label={disasterLabel(row.disaster)}
-                  item={row.nearest}
+                  key={group.item?.id ?? "missing"}
+                  label={groupTitle(group)}
+                  item={group.item}
+                  far={group.far}
                 />
               ))}
             </tbody>
@@ -138,6 +192,7 @@ function PlaceTable({ place }: { place: Place }) {
               <Row
                 label={`${kindOf("SHELTER").label}`}
                 item={summary.shelter}
+                far={summary.shelter ? isFar(summary.shelter) : false}
                 note="災害がおさまったあと、生活する場所"
               />
             </tbody>
@@ -148,13 +203,23 @@ function PlaceTable({ place }: { place: Place }) {
   );
 }
 
+/**
+ * 表の1行。
+ *
+ * **遠すぎるものは答えの欄に置かない。** 半径のはしごは 256km まで伸びるので、
+ * その災害の指定が自分の市町村に無いと遠くの指定が最寄りとして返る。
+ * 紙の上でそれを 500m の小学校と同じ書式で並べると、貼ったまま何年も嘘をつく。
+ */
 function Row({
   label,
   item,
+  far = false,
   note,
 }: {
   label: string;
   item: NearbyItem | null;
+  /** 見つかってはいるが、逃げ先と呼べる距離ではない */
+  far?: boolean;
   note?: string;
 }) {
   return (
@@ -168,21 +233,33 @@ function Row({
         )}
       </td>
       <td className="py-1.5 pr-2">
-        {item ? (
+        {item && !far && (
           <>
             <span className="font-medium text-zinc-900">{item.name}</span>
             <span className="block text-[10px] text-zinc-500">
               {item.address}
             </span>
           </>
-        ) : (
-          <span className="text-zinc-600">
-            この付近に、この災害で使える指定がありません
-          </span>
+        )}
+        {item && far && (
+          <>
+            <span className="font-medium text-zinc-900">近くにありません</span>
+            <span className="block text-[10px] text-zinc-600">
+              {`最寄りは${formatDistance(item.distanceM)}先の${item.name}（${item.address}）`}
+            </span>
+          </>
+        )}
+        {!item && (
+          <>
+            <span className="font-medium text-zinc-900">近くにありません</span>
+            <span className="block text-[10px] text-zinc-600">
+              探した範囲に、その災害で使える指定がありませんでした
+            </span>
+          </>
         )}
       </td>
       <td className="py-1.5 text-right font-semibold text-zinc-900 tabular-nums">
-        {item ? formatDistance(item.distanceM) : "—"}
+        {item && !far ? formatDistance(item.distanceM) : "—"}
       </td>
     </tr>
   );
