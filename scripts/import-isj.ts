@@ -126,7 +126,17 @@ async function main() {
     console.log("");
 
     console.log("入れ替え");
-    await prisma.machiaza.deleteMany({});
+    /*
+      **DELETE ではなく TRUNCATE。** 消すのは常に全行なのに、DELETE は古い行に
+      「死んだ」印を付けて残すだけで、領域はその場では空かない。
+      **同じ 191,106 行を入れ直しただけで、本番の Machiaza が 88MB → 123MB に
+      膨らんだ**（2026-09-13 実測）。autovacuum が回収しても「再利用可能」になるだけで
+      OS には返らないので、取り込むたびに下限が上がっていく
+      （Neon Free は 512MB で、ストレージがそのまま料金の枠）。
+      TRUNCATE はファイルごと切り捨てるので、この増分が出ない。
+      Machiaza を参照している表は無いため、そのまま切れる。
+    */
+    await prisma.$executeRaw`TRUNCATE TABLE "Machiaza"`;
     for (let i = 0; i < records.length; i += CHUNK) {
       await prisma.machiaza.createMany({ data: records.slice(i, i + CHUNK) });
     }

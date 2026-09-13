@@ -295,10 +295,17 @@ async function main() {
         `指定避難所 ${shelters.length.toLocaleString()}`,
     );
 
-    // 2. まるごと入れ替え。Shelter が Municipality を参照しているので削除は Shelter から。
+    // 2. まるごと入れ替え。
     console.log("入れ替え");
-    await prisma.shelter.deleteMany({});
-    await prisma.municipality.deleteMany({});
+    /*
+      **2つの表を1文の TRUNCATE でまとめて切る。** Shelter が Municipality を
+      参照しているので、順番に切ると外部キーで弾かれる。参照している側を同じ文に
+      並べれば通る（**CASCADE は使わない。** 消える表を SQL に書き出しておきたい。
+      CASCADE だと、後から参照が増えたときに黙って巻き込む）。
+      DELETE をやめた理由は import-isj.ts に書いたものと同じで、
+      死んだ行が残って表が膨らみ、取り込むたびにストレージの下限が上がるため。
+    */
+    await prisma.$executeRaw`TRUNCATE TABLE "Shelter", "Municipality"`;
     await prisma.municipality.createMany({ data: municipalities });
     await insertShelters(emergency);
     await insertShelters(shelters);
