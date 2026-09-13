@@ -12,7 +12,7 @@ import { kindOf } from "@/lib/kinds";
 import type { LatLng, NearbyItem, NearbyResult } from "@/lib/nearby";
 import type { PlaceSummary } from "@/lib/place-summary";
 import { MAX_PLACES, type Place } from "@/lib/places";
-import type { ShelterDetail } from "@/lib/shelter-detail";
+import type { PlaceDetail } from "@/lib/shelter-detail";
 import type { ShelterFilter } from "@/lib/shelters";
 
 /**
@@ -666,13 +666,31 @@ function NearbyList({
               </span>
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-1.5">
+                  {/*
+                    同じ場所に両方の指定があるときは、地図の二色の点と同じ見た目
+                    （橙の芯＋青いリング）にする。色は増やさない。
+                  */}
                   <span
                     className="size-2 shrink-0 rounded-full"
-                    style={{ backgroundColor: kindOf(item.kind).color }}
+                    style={{
+                      backgroundColor: kindOf(item.kind).color,
+                      boxShadow: item.alsoKind
+                        ? `0 0 0 2px ${kindOf(item.alsoKind).color}`
+                        : undefined,
+                    }}
                   />
                   <span className="truncate text-sm text-zinc-900">
                     {item.name}
                   </span>
+                  {/*
+                    記号だけにしない。二色の点は凡例を知らないと読めないので、
+                    もう一方の指定があることは文字でも書く。
+                  */}
+                  {item.alsoKind && (
+                    <span className="shrink-0 rounded-full border border-zinc-300 px-1.5 text-[10px] text-zinc-600">
+                      {kindOf(item.alsoKind).shortLabel}も
+                    </span>
+                  )}
                 </span>
                 <span className="mt-0.5 block truncate text-xs text-zinc-500">
                   {item.disasters === null
@@ -704,7 +722,7 @@ function InlineDetail({ id }: { id: string }) {
 }
 
 function DetailPane({ id }: { id: string }) {
-  const [detail, setDetail] = useState<ShelterDetail | null>(null);
+  const [detail, setDetail] = useState<PlaceDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // 地図の点は転送量のために名前と種別しか持っていないので、押されてから取る。

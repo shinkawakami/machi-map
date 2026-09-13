@@ -99,6 +99,15 @@ const ZOOM_STEP = 2;
 
 const SOURCE_ID = "shelters";
 const LAYER_ID = "shelter-points";
+/**
+ * 両方の指定がある場所の下敷き。点より一回り大きい青い丸を敷き、
+ * 上に橙の丸を重ねて**二色の点**にする（橙の芯＋青いリング）。
+ *
+ * **色は増やさない。** 3色目を作ると「緊急でもあり避難所でもある」という
+ * 第3の種別が実在するように読めるが、制度上そんな区分は無い。
+ * 2つの指定が同じ場所にある、という事実の見た目どおりにする。
+ */
+const BOTH_LAYER_ID = "shelter-points-both";
 
 /** 選択中の避難場所。点より上に重ねる。 */
 const SELECTED_SOURCE_ID = "selected-shelter";
@@ -376,7 +385,13 @@ export default function ShelterMap() {
                         type: "Point" as const,
                         coordinates: [p.lng, p.lat],
                       },
-                      properties: { id: p.id, name: p.name, kind: p.kind },
+                      properties: {
+                        id: p.id,
+                        name: p.name,
+                        kind: p.kind,
+                        // undefined は properties から落ちるので、必ず真偽値で入れる。
+                        both: p.both === true,
+                      },
                     }))
                   : [],
             });
@@ -402,6 +417,40 @@ export default function ShelterMap() {
           type: "geojson",
           data: { type: "FeatureCollection", features: [] },
         });
+        // リングは点より先に足す（＝下に敷く）。
+        map.addLayer({
+          id: BOTH_LAYER_ID,
+          type: "circle",
+          source: SOURCE_ID,
+          filter: ["==", ["get", "both"], true],
+          paint: {
+            /*
+              点の半径（3 / 6 / 10）に、リングぶんを足した大きさ。
+
+              **リング幅もズームで変える**（2 / 3 / 4px）。3px 固定にしていたら、
+              点が小さい低ズームでリングだけが相対的に太くなり、
+              z9 で直径が 9px → 15px（面積で約2.8倍）になった。
+              密なところでは点の4割前後が両方の指定なので、
+              引いた画面が「大きい点＝重要」と読める絵になってしまう。
+              式は addLayer の型推論に載せたいので、切り出さずここに書く。
+            */
+            "circle-radius": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              9,
+              5,
+              13,
+              9,
+              18,
+              14,
+            ],
+            "circle-color": COLOR_SHELTER,
+            "circle-stroke-width": 1.5,
+            "circle-stroke-color": "#ffffff",
+            "circle-opacity": 0.9,
+          },
+        });
         map.addLayer({
           id: LAYER_ID,
           type: "circle",
@@ -425,7 +474,8 @@ export default function ShelterMap() {
               COLOR_EMERGENCY,
               COLOR_SHELTER,
             ],
-            "circle-stroke-width": 1.5,
+            // 二色の点は、白い縁を挟まず青いリングに直接載せる。
+            "circle-stroke-width": ["case", ["==", ["get", "both"], true], 0, 1.5],
             "circle-stroke-color": "#ffffff",
             "circle-opacity": 0.9,
           },
@@ -433,7 +483,7 @@ export default function ShelterMap() {
 
         // 詳細は吹き出しではなく下段のパネルに出す。スマホで指と吹き出しが
         // 重なるのを避けたいのと、近い順の一覧と表示を使い回せるため。
-        map.on("click", LAYER_ID, (event) => {
+        map.on("click", [LAYER_ID, BOTH_LAYER_ID], (event) => {
           const feature = event.features?.[0];
           if (!feature) return;
           const { id } = feature.properties as { id: string };
@@ -467,7 +517,11 @@ export default function ShelterMap() {
           }
 
           // 点の上を押したときは詳細を開く側に任せる。
-          if (map.queryRenderedFeatures(event.point, { layers: [LAYER_ID] }).length) {
+          if (
+            map.queryRenderedFeatures(event.point, {
+              layers: [LAYER_ID, BOTH_LAYER_ID],
+            }).length
+          ) {
             return;
           }
 
@@ -494,10 +548,10 @@ export default function ShelterMap() {
           }
         });
 
-        map.on("mouseenter", LAYER_ID, () => {
+        map.on("mouseenter", [LAYER_ID, BOTH_LAYER_ID], () => {
           map.getCanvas().style.cursor = "pointer";
         });
-        map.on("mouseleave", LAYER_ID, () => {
+        map.on("mouseleave", [LAYER_ID, BOTH_LAYER_ID], () => {
           map.getCanvas().style.cursor = baseCursorRef.current;
         });
 

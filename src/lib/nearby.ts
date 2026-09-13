@@ -1,4 +1,5 @@
 import { Prisma } from "@/generated/prisma/client";
+import type { ShelterKind } from "@/generated/prisma/enums";
 import { prisma } from "@/lib/db";
 import {
   type DetailRow,
@@ -9,7 +10,14 @@ import { type Bbox, type ShelterFilter, sqlWhereFor } from "@/lib/shelters";
 
 export type LatLng = { lat: number; lng: number };
 
-export type NearbyItem = ShelterDetail & { distanceM: number };
+export type NearbyItem = ShelterDetail & {
+  distanceM: number;
+  /**
+   * 同じ場所・同じ名前で、もう一方の種別の指定もある（1行にまとめてある）。
+   * まとめる条件は mergeSameFacility を参照。
+   */
+  alsoKind?: ShelterKind;
+};
 
 export type NearbyResult = {
   /** 実際に使った半径（m）。どこまで広げて見つけたのかは UI で見せる */
@@ -74,12 +82,71 @@ export async function fetchNearby(
   };
 
   for (const radiusM of RADII_M) {
-    const items = await queryWithin(center, radiusM, limit, filter);
-    result = { radiusM, exhausted: items.length < limit, items };
-    if (items.length >= limit) break;
+    const rows = await queryWithin(center, radiusM, limit, filter);
+
+    /*
+      半径を広げるかどうかは、**まとめる前の指定の数**で決める。
+      まとめた後の行数で判定すると、同じ場所の2件が1行になったぶんだけ
+      「まだ足りない」と読み違えて、要らない往復（最大 256km まで）が増える。
+      exhausted の意味も「指定がこれしか無い」のままにそろえる。
+    */
+    result = {
+      radiusM,
+      exhausted: rows.length < limit,
+      items: mergeSameFacility(rows),
+    };
+    if (rows.length >= limit) break;
   }
 
   return result;
+}
+
+/**
+ * 同じ施設に緊急と避難所の両方の指定があるときは、1行にまとめる。
+ *
+ * **鍵は元データの「名前＋住所」。座標では寄せない。** 同じ施設でも2つの指定で
+ * 座標が数十 m ずれていることが普通にある（常盤小学校は住所が同じで 25m ずれる）。
+ * 実データで、名前と住所が完全一致する組は 46,124 組（緊急の 39.1% が関与）。
+ * 座標の完全一致だけだと 27,875 組で、**多数派を取りこぼす**。
+ *
+ * **名前も条件にする**（住所だけでは寄せない）。同じ住所でも
+ * 「南町中学校（体育館等）」と「南町中学校」のように、
+ * **建物のどこが指定されているかが違う**ことがある。逃げるときに効く差なので、
+ * 名前が違えば2行のまま出す。
+ *
+ * 残す1件は指定緊急避難場所。災害種別を持つのはこちらで、先に向かう場所でもある。
+ * 避難所の指定があることは `alsoKind` で渡し、UI 側で出す
+ * （種別の区別はこのアプリの主張2なので、まとめても消さない）。
+ */
+function mergeSameFacility(items: NearbyItem[]): NearbyItem[] {
+  const groups = new Map<string, NearbyItem[]>();
+  for (const item of items) {
+    const key = `${item.name}|${item.address}`;
+    const group = groups.get(key);
+    if (group) group.push(item);
+    else groups.set(key, [item]);
+  }
+
+  const merged: NearbyItem[] = [];
+  for (const group of groups.values()) {
+    if (group.length === 1) {
+      merged.push(group[0]);
+      continue;
+    }
+
+    // 残すのは指定緊急避難場所。災害種別を持つのはこちらで、先に向かう場所でもある。
+    const primary = group.find((i) => i.kind === "EMERGENCY") ?? group[0];
+    const other = group.find((i) => i.kind !== primary.kind);
+    merged.push({
+      ...primary,
+      alsoKind: other?.kind,
+      // 同じ施設でも指定ごとに座標がずれるので、近いほうの距離で出す。
+      distanceM: Math.min(...group.map((i) => i.distanceM)),
+    });
+  }
+
+  // まとめた行は近いほうの距離を採るので、並びを取り直す。
+  return merged.sort((a, b) => a.distanceM - b.distanceM);
 }
 
 /**

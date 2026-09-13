@@ -53,6 +53,11 @@ export type ShelterPoint = {
   name: string;
   lat: number;
   lng: number;
+  /**
+   * 同じ座標に、もう一方の種別の指定もある。地図は二色の点で描く。
+   * **「1つの施設だ」という意味ではない**（collapseSameSpot を参照）。
+   */
+  both?: true;
 };
 
 export type ShelterCluster = {
@@ -138,25 +143,108 @@ export async function fetchShelters(
   // 件数を数えてから取り直すと往復が2回になる。1件多く取って超過を判定する。
   const rows = await prisma.shelter.findMany({
     where: whereFor(bbox, filter),
-    select: { sourceId: true, kind: true, name: true, lat: true, lng: true },
+    // address は**まとめる鍵にだけ使い、点としては返さない**。
+    // 2,000 点ぶんの住所を載せると転送量が数十 KB 増えるが、
+    // 地図の点に住所は要らない（押したときに詳細を取りに行く）。
+    select: {
+      sourceId: true,
+      kind: true,
+      name: true,
+      address: true,
+      lat: true,
+      lng: true,
+    },
     take: MAX_POINTS + 1,
   });
 
   if (rows.length <= MAX_POINTS) {
     return {
       mode: "points",
+      // **件数は指定の数のまま数える。** まとめるのは描き方の話で、
+      // 「1行＝1つの指定」という持ち方は変えない。
       total: rows.length,
-      points: rows.map((r) => ({
-        id: r.sourceId,
-        kind: r.kind,
-        name: r.name,
-        lat: round5(r.lat),
-        lng: round5(r.lng),
-      })),
+      points: collapsePoints(
+        rows.map((r) => ({
+          id: r.sourceId,
+          kind: r.kind,
+          name: r.name,
+          address: r.address,
+          lat: round5(r.lat),
+          lng: round5(r.lng),
+        })),
+      ),
     };
   }
 
   return fetchClusters(bbox, cells, filter);
+}
+
+/**
+ * 地図に出す点を、2つの見方でまとめる。
+ *
+ * **1. 同じ施設（名前＋住所が一致）は1つの点にする。** 元データは1行＝1つの指定で、
+ * 同じ学校に緊急と避難所の2つの指定があると、座標が数十 m ずれた2点になる
+ * （常盤小学校は住所が同じで 25m ずれる）。z13 では1px も離れず、
+ * ただ重なって見えるだけになる。実データで 46,124 組。
+ *
+ * **2. 座標が完全に一致するものも1つにする。** 1で寄らなかった組
+ * （「南町中学校（体育館等）」と「南町中学校」のように名前が違うもの）も、
+ * 同じ座標ならピクセルまで重なる。しかもこのクエリには ORDER BY が無いので、
+ * **どちらが上に来るかは不定**で、取り込み直すと入れ替わる。つまり
+ * **指定緊急避難場所でもある建物が、青い点（指定避難所）だけに見えることがあった。**
+ * このアプリが防ごうとしている誤解そのものなので、重なりのほうを無くす。
+ *
+ * **どちらも「同じ施設だ」と言い切るための統合ではない。** 残すのは常に
+ * 指定緊急避難場所（災害種別を持ち、先に向かう場所）で、両方そろっていれば
+ * `both` を立てて地図が二色で描く。件数（total）は指定の数のまま数える。
+ */
+function collapsePoints(
+  points: (ShelterPoint & { address: string })[],
+): ShelterPoint[] {
+  const byFacility = collapseBy(points, (p) => `${p.name}|${p.address}`);
+  const bySpot = collapseBy(byFacility, (p) => `${p.lat},${p.lng}`);
+
+  // address はここで落とす（外に出すのは ShelterPoint の形だけ）。
+  return bySpot.map(({ id, kind, name, lat, lng, both }) => ({
+    id,
+    kind,
+    name,
+    lat,
+    lng,
+    both,
+  }));
+}
+
+/** 同じ鍵の点を1つに寄せる。両方の種別がそろっていれば both を立てる。 */
+function collapseBy<T extends ShelterPoint>(
+  points: T[],
+  keyOf: (point: T) => string,
+): T[] {
+  const groups = new Map<string, T[]>();
+  for (const point of points) {
+    const key = keyOf(point);
+    const group = groups.get(key);
+    if (group) group.push(point);
+    else groups.set(key, [point]);
+  }
+
+  const collapsed: T[] = [];
+  for (const group of groups.values()) {
+    if (group.length === 1) {
+      collapsed.push(group[0]);
+      continue;
+    }
+
+    const emergency = group.find((p) => p.kind === "EMERGENCY");
+    const primary = emergency ?? group[0];
+    const both =
+      group.some((p) => p.both) ||
+      (Boolean(emergency) && group.some((p) => p.kind === "SHELTER"));
+
+    collapsed.push(both ? { ...primary, both: true } : primary);
+  }
+
+  return collapsed;
 }
 
 async function fetchClusters(
