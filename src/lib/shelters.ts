@@ -58,6 +58,21 @@ export type ShelterFilter = {
    * 並びは DISASTER_TYPES の順に正規化されている（canonicalDisasters）。
    */
   disasters: DisasterKey[];
+  /**
+   * 受入対象者の定めがある指定避難所（＝指定福祉避難所）だけに絞る。
+   *
+   * **`disasters` とちょうど裏返しの列。** 災害種別が指定緊急避難場所にしか
+   * 無いのと同じように、`targetPersons` は**指定避難所にしか無い**
+   * （実データで EMERGENCY 115,829 件すべて null・SHELTER の 11.1% にあたる 9,276 件に値がある）。
+   * そのため、これを立てると指定緊急避難場所は1件も残らない。**黙って消さず、
+   * UI 側で種別の選択そのものを指定避難所だけに寄せる**（ShelterFilterBar）。
+   *
+   * **中身では分類しない。** 値は自由記述で 668 通りあり、最多の「要配慮者」
+   * （4,409 件・47.5%）は災害対策基本法の総称で、どの層かを名指ししていない。
+   * 高齢者／障害者／乳幼児に振り分けると、**元データが持っていない区別を
+   * こちらで作る**ことになる。有無だけで絞り、文言そのものは詳細でそのまま見せる。
+   */
+  welfareOnly: boolean;
 };
 
 export type ShelterPoint = {
@@ -128,6 +143,7 @@ export function parseFilter(params: URLSearchParams): ShelterFilter {
   return {
     kinds: kinds.length > 0 ? kinds : [...ALL_KINDS],
     disasters: parseDisasters(params.get("disaster")),
+    welfareOnly: params.get("welfare") === "1",
   };
 }
 
@@ -317,6 +333,8 @@ function whereFor(bbox: Bbox, filter: ShelterFilter): Prisma.ShelterWhereInput {
           ],
         }
       : {}),
+    // 受入対象者は指定避難所にしかない列。立てると緊急避難場所は残らない。
+    ...(filter.welfareOnly ? { targetPersons: { not: null } } : {}),
   };
 }
 
@@ -351,6 +369,12 @@ export function sqlWhereFor(bbox: Bbox, filter: ShelterFilter): Prisma.Sql {
     conditions.push(
       Prisma.sql`(kind = 'SHELTER'::"ShelterKind" OR (${flags}))`,
     );
+  }
+
+  if (filter.welfareOnly) {
+    // 索引に "targetPersons" を載せてあるので Index Only Scan のまま
+    // （載せる前は z8 関東で Parallel Seq Scan・buffers 4,836 に落ちていた）。
+    conditions.push(Prisma.sql`"targetPersons" IS NOT NULL`);
   }
 
   return Prisma.join(conditions, " AND ");

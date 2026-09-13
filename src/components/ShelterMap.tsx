@@ -164,6 +164,7 @@ export default function ShelterMap() {
     // 開いた瞬間に中身が入っていることを優先する。既定は絞り込みなし。
     kinds: ["EMERGENCY", "SHELTER"],
     disasters: [],
+    welfareOnly: false,
   });
 
   /**
@@ -343,7 +344,7 @@ export default function ShelterMap() {
         const cells = snapCells(
           map.getContainer().clientWidth / CLUSTER_CELL_PX,
         );
-        const { kinds, disasters } = filterRef.current;
+        const { kinds, disasters, welfareOnly } = filterRef.current;
         const query = new URLSearchParams({
           bbox,
           cells: String(cells),
@@ -356,6 +357,7 @@ export default function ShelterMap() {
         if (disasters.length > 0) {
           query.set("disaster", encodeDisasters(disasters));
         }
+        if (welfareOnly) query.set("welfare", "1");
 
         abortRef.current?.abort();
         const controller = new AbortController();

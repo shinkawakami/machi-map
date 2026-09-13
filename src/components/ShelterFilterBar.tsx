@@ -46,7 +46,34 @@ export default function ShelterFilterBar({
       setHint((n) => n + 1);
       return;
     }
-    onChange({ ...value, kinds: next });
+    /*
+      **緊急避難場所を出しに来たら、福祉避難所の絞り込みは外す。**
+      受入対象者は指定避難所にしかない列なので、両方立てると緊急避難場所は
+      1件も出ない。押したのに何も起きない操作を残さない。
+    */
+    const wantsEmergency = !value.kinds.includes(kind) && kind === "EMERGENCY";
+    onChange({
+      ...value,
+      kinds: next,
+      welfareOnly: wantsEmergency ? false : value.welfareOnly,
+    });
+  };
+
+  /**
+   * 福祉避難所だけに絞る。
+   *
+   * **押すと種別も指定避難所だけに寄せる。** 受入対象者は指定避難所にしかない列で、
+   * 黙って立てると緊急避難場所がすべて消える。消えた理由が画面のどこにも
+   * 残らないのを避けて、**種別チップのほうも一緒に動かして目に見えるようにする**
+   * （絞り込みの状態は画面に出す、という整理。lib/filter-view.ts）。
+   */
+  const toggleWelfare = () => {
+    const on = !value.welfareOnly;
+    onChange({
+      ...value,
+      welfareOnly: on,
+      kinds: on ? ["SHELTER"] : value.kinds,
+    });
   };
 
   const chosen = value.disasters;
@@ -112,7 +139,7 @@ export default function ShelterFilterBar({
 
   return (
     <div className="shrink-0 border-b border-zinc-100">
-      <div className="flex items-center gap-1.5 px-3 py-1.5">
+      <div className="flex flex-wrap items-center gap-1.5 px-3 py-1.5">
         {KINDS.map((kind) => {
           const on = value.kinds.includes(kind.key);
           const last = on && value.kinds.length === 1;
@@ -139,6 +166,24 @@ export default function ShelterFilterBar({
             </button>
           );
         })}
+
+        {/*
+          福祉避難所は種別の並びに置く。災害種別（緊急避難場所の属性）とは
+          別の軸で、指定避難所の中の絞り込みにあたるため。
+        */}
+        <button
+          type="button"
+          aria-pressed={value.welfareOnly}
+          title="受入対象者の定めがある指定避難所"
+          onClick={toggleWelfare}
+          className={`flex min-h-8 items-center rounded-full border px-2.5 text-[11px] transition-colors ${
+            value.welfareOnly
+              ? "border-zinc-300 bg-zinc-100 font-medium text-zinc-900"
+              : "border-zinc-200 bg-white text-zinc-500"
+          }`}
+        >
+          福祉避難所
+        </button>
 
         {/*
           災害種別は畳んでおく。開くのは絞りたいときだけで、
@@ -215,6 +260,22 @@ export default function ShelterFilterBar({
           </div>
         </details>
       </div>
+
+      {/*
+        **開設されるとは限らないことを、絞っているあいだは出しっぱなしにする。**
+        福祉避難所は市町村が開設を判断し、対象者も事前に定められていることが多い。
+        「最寄りの福祉避難所」を行き先として読まれると、このアプリが
+        出してはいけない側の案内になる。ここは字数を惜しまない。
+      */}
+      {value.welfareOnly && (
+        <p className="px-3 pb-1.5 text-[11px] leading-relaxed text-zinc-600">
+          受入対象者の定めがある指定避難所です。
+          <strong className="font-medium text-zinc-900">
+            開設するかは市町村が判断し、対象者も定められています。
+          </strong>
+          受け入れの条件は各施設の詳細（受入対象者）と、お住まいの市町村で確認してください。
+        </p>
+      )}
 
       {hint > 0 && (
         <p role="status" className="px-3 pb-1.5 text-[11px] text-zinc-600">

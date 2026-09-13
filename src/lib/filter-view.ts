@@ -49,6 +49,16 @@ export function filterBadges(filter: ShelterFilter): FilterBadge[] {
     });
   }
 
+  /*
+    **福祉避難所の絞り込みは、種別の絞り込みを兼ねる。** 受入対象者は指定避難所に
+    しかない列なので、これが立っているときは必ず「避難所だけ」でもある。
+    2つ並べても同じことを2回言うだけなので、こちらに寄せる。
+  */
+  if (filter.welfareOnly) {
+    badges.push({ key: "kind", label: "福祉避難所だけ表示中" });
+    return badges;
+  }
+
   if (filter.kinds.length === 1) {
     const kind = kindOf(filter.kinds[0]);
     badges.push({

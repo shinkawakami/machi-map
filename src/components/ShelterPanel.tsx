@@ -767,6 +767,7 @@ function NearbyList({
     if (filter.disasters.length > 0) {
       query.set("disaster", encodeDisasters(filter.disasters));
     }
+    if (filter.welfareOnly) query.set("welfare", "1");
 
     (async () => {
       try {
@@ -932,6 +933,7 @@ function nearbyKey(origin: Origin | null, filter: ShelterFilter): string {
     origin?.lng,
     filter.kinds.join("+"),
     filter.disasters.join("+"),
+    filter.welfareOnly,
   ].join("/");
 }
 
