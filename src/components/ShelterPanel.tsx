@@ -21,10 +21,22 @@ export type PanelState =
   | { state: "list" }
   | { state: "detail"; id: string };
 
+/**
+ * 近い順の起点。現在地ボタンで取ったもの（gps）と、地図で指したもの（picked）は
+ * 意味が違う。「現在地から近い順」と言い切れるのは前者だけなので、
+ * 座標だけでなく出どころも一緒に持ち回す。
+ */
+export type Origin = LatLng & { source: "gps" | "picked" };
+
+/** 見出しに出す起点の呼び名。 */
+function originLabel(origin: Origin | null): string {
+  return origin?.source === "picked" ? "指した地点" : "現在地";
+}
+
 export default function ShelterPanel({
   panel,
   filter,
-  center,
+  origin,
   onClose,
   onSelect,
   onBackToList,
@@ -32,8 +44,8 @@ export default function ShelterPanel({
 }: {
   panel: PanelState;
   filter: ShelterFilter;
-  /** 現在地。null なら一覧は出せない */
-  center: LatLng | null;
+  /** 近い順の起点。null なら一覧は出せない */
+  origin: Origin | null;
   onClose: () => void;
   onSelect: (item: NearbyItem) => void;
   onBackToList: () => void;
@@ -44,7 +56,7 @@ export default function ShelterPanel({
   return (
     <div className="pointer-events-auto absolute inset-x-0 bottom-0 flex max-h-[60%] flex-col rounded-t-xl border-t border-zinc-200 bg-white shadow-[0_-4px_16px_rgba(0,0,0,0.08)]">
       <div className="flex shrink-0 items-center gap-2 border-b border-zinc-100 px-3 py-2">
-        {panel.state === "detail" && center && (
+        {panel.state === "detail" && origin && (
           <button
             type="button"
             onClick={onBackToList}
@@ -54,7 +66,9 @@ export default function ShelterPanel({
           </button>
         )}
         <h2 className="text-xs font-semibold text-zinc-700">
-          {panel.state === "list" ? "現在地から近い順" : "施設の詳細"}
+          {panel.state === "list"
+            ? `${originLabel(origin)}から近い順`
+            : "施設の詳細"}
         </h2>
         <button
           type="button"
@@ -69,8 +83,8 @@ export default function ShelterPanel({
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         {panel.state === "list" ? (
           <NearbyList
-            key={nearbyKey(center, filter)}
-            center={center}
+            key={nearbyKey(origin, filter)}
+            origin={origin}
             filter={filter}
             onSelect={onSelect}
             onFocus={onFocus}
@@ -84,12 +98,12 @@ export default function ShelterPanel({
 }
 
 function NearbyList({
-  center,
+  origin,
   filter,
   onSelect,
   onFocus,
 }: {
-  center: LatLng | null;
+  origin: Origin | null;
   filter: ShelterFilter;
   onSelect: (item: NearbyItem) => void;
   onFocus: (target: LatLng) => void;
@@ -100,12 +114,12 @@ function NearbyList({
   // 絞り込みを変えたら取り直す。「この災害で使える最寄り」が変わるのが要点なので、
   // 一覧を開いたまま災害種別を切り替えられるようにしてある。
   useEffect(() => {
-    if (!center) return;
+    if (!origin) return;
     const controller = new AbortController();
 
     const query = new URLSearchParams({
-      lat: String(center.lat),
-      lng: String(center.lng),
+      lat: String(origin.lat),
+      lng: String(origin.lng),
       kinds: filter.kinds.join(","),
     });
     if (filter.disaster) query.set("disaster", filter.disaster);
@@ -124,10 +138,14 @@ function NearbyList({
     })();
 
     return () => controller.abort();
-  }, [center, filter]);
+  }, [origin, filter]);
 
-  if (!center) {
-    return <Message>現在地が分かりませんでした。</Message>;
+  if (!origin) {
+    return (
+      <Message>
+        起点が決まっていません。現在地を取るか、地図から地点を選んでください。
+      </Message>
+    );
   }
   if (error) return <Message>{error}</Message>;
   if (!result) return <Message>探しています…</Message>;
@@ -221,13 +239,13 @@ function DetailPane({ id }: { id: string }) {
 }
 
 /**
- * 一覧を作り直す単位。現在地か絞り込みが変わったら別物として扱い、
+ * 一覧を作り直す単位。起点か絞り込みが変わったら別物として扱い、
  * key で作り直して「探しています…」から始める。
  */
-function nearbyKey(center: LatLng | null, filter: ShelterFilter): string {
+function nearbyKey(origin: Origin | null, filter: ShelterFilter): string {
   return [
-    center?.lat,
-    center?.lng,
+    origin?.lat,
+    origin?.lng,
     filter.kinds.join("+"),
     filter.disaster,
   ].join("/");
