@@ -120,10 +120,19 @@ export default function IntroCard() {
               </li>
             </ul>
 
+            <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-[12px] leading-relaxed text-zinc-700">
+              <span className="font-semibold text-zinc-900">
+                自宅・職場を「拠点」として保存できます。
+              </span>
+              <br />
+              拠点ごとに「8種の災害 × それぞれの最寄り」が1枚の表になります。
+              保存した拠点は URL に入るので、ログインなしで家族に送れて、
+              QR コードで紙に出して貼っておけます。
+            </p>
+
             <p className="mt-3 border-t border-zinc-100 pt-3 text-[11px] leading-relaxed text-zinc-500">
-              「現在地から探す」か「地図から選ぶ」を押すと、その地点から近い順の一覧が出ます。
-              引っ越し先など、いま居ない場所も地図で選べます。データは市町村が登録し公開に
-              同意したものに限られます（最下部の注意書きを参照してください）。
+              データは市町村が登録し公開に同意したものに限られます
+              （最下部の注意書きを参照してください）。
             </p>
 
             <button

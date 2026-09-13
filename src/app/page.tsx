@@ -9,11 +9,17 @@ export default function Home() {
         <h1 className="min-w-0 truncate text-sm font-semibold text-zinc-900">
           わが家の逃げ先
           {/*
-            5秒で伝える1行。「避難場所の地図」だけでは既存の防災マップと区別がつかないので、
-            拠点ごとに出すことと、災害の種類で変わることを名前のすぐ横に置く。
+            5秒で伝える1行。**説明ではなく、やってほしいことと見返りを書く。**
+            「避難場所の地図」だけでは既存の防災マップと区別がつかないし、
+            開いた人は何をすればいいのか分からないまま地図を眺めることになる。
+            狭い画面では前半（やること）だけを残す。
           */}
           <span className="ml-2 text-xs font-normal text-zinc-500">
-            自宅や職場から、災害の種類ごとの避難場所
+            自宅や職場を登録
+            <span className="hidden sm:inline">
+              すると、8種類の災害それぞれの逃げ先が1枚の表になります
+            </span>
+            <span className="sm:hidden">→ 災害ごとの逃げ先が1枚に</span>
           </span>
         </h1>
         <IntroCard />

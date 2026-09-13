@@ -11,25 +11,22 @@ import type {
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
 } from "react";
 
-import AddressSearch from "@/components/AddressSearch";
-import RegionJump from "@/components/RegionJump";
 import SavePlaceDialog from "@/components/SavePlaceDialog";
 import ShareSheet from "@/components/ShareSheet";
-import ShelterFilterBar from "@/components/ShelterFilterBar";
 import ShelterPanel, {
   type Origin,
-  type PanelState,
+  type PanelView,
 } from "@/components/ShelterPanel";
 import { kindOf } from "@/lib/kinds";
 import type { LatLng } from "@/lib/nearby";
 import { findPlaceAt, makePlace, MAX_PLACES, type Place } from "@/lib/places";
 import * as placesStore from "@/lib/places-store";
-import type { AreaBounds } from "@/lib/regions";
 import type { ShelterFilter, SheltersResult } from "@/lib/shelters";
 
 /**
@@ -56,13 +53,15 @@ const MAP_STYLE: StyleSpecification = {
 };
 
 /**
- * 起動時は全国を収める。開いた瞬間に中身が入っていることを優先する。
- * 中心とズームを決め打ちにすると画面幅で端が切れるので、bounds で指定する。
+ * 拠点をまだ持っていない人に最初に見せる場所。
+ *
+ * 全国から始めると、避難場所が1つも出ていない画面をまず見ることになり、
+ * 何のアプリか分からないまま終わる。**動いている画面を見せたほうが早い**ので、
+ * 避難場所が密にある場所（東京駅まわり）を例として出す。
+ * 「なぜここ？」にならないよう、パネル側で例であることを断る。
+ * 2回目以降は拠点が起点になるので、ここは使われない。
  */
-const JAPAN_BOUNDS: [[number, number], [number, number]] = [
-  [122.9, 24.0],
-  [146.0, 45.6],
-];
+const SAMPLE_VIEW = { center: [139.7671, 35.6812] as [number, number], zoom: 13 };
 /**
  * 日本の外に出ても意味がないので止める。ただし**大きく取る**こと。
  * maxBounds が表示範囲より狭いと、MapLibre はカメラのほうを黙って動かして
@@ -79,39 +78,52 @@ const MAX_BOUNDS: [[number, number], [number, number]] = [
 const COLOR_EMERGENCY = kindOf("EMERGENCY").color;
 const COLOR_SHELTER = kindOf("SHELTER").color;
 
-/** クラスタの目標セルサイズ（px）。画面幅から横方向の分割数を決める。 */
-const CLUSTER_CELL_PX = 80;
+/**
+ * クラスタの目標セルサイズ（px）。API に渡す分割数のもとになる。
+ *
+ * **まとめた円は画面には描かない。** 全国の密度は、場所を決める判断にも
+ * 逃げ先を知る判断にも使われない情報で、入口の主役（地図を押して場所を決める）と
+ * 押す対象を取り合うだけだった。
+ * サーバー側の点／クラスタ切り替えは残してある。あれは「広い範囲で3万点を返さない」
+ * ための上限で、画面に出すかどうかとは別の話。
+ */
+const CLUSTER_CELL_PX = 150;
 
 /**
- * 避難場所を描き始めるズーム。これより引いた画面では何も描かない。
- *
- * 全国ビューで19万件をクラスタにまとめると、画面が白い円で埋まるだけで
- * 何も読めず、そのうえ地点を指すこともできない。
- * 入口で効いているのは「全件が載っていること」ではなく
- * 「入力から始まらないこと」なので、全件表示のほうは降ろす。
- * 開いた画面は、地図と「場所を決める」ひと押しから始める。
+ * 押して寄るときの1回ぶんの段。
+ * クラスタを押したときの寄り方（+2）とそろえる。同じ地図で寄り方が2種類あると、
+ * どれだけ動くかが読めない。1回で大きく飛ぶと、行き過ぎたときに戻す手間のほうが増える。
  */
-const MIN_DATA_ZOOM = 10;
+const ZOOM_STEP = 2;
 
 const SOURCE_ID = "shelters";
 const LAYER_ID = "shelter-points";
 
-/** 現在地と選択中の点。避難場所の点より上に重ねる。 */
-const ME_SOURCE_ID = "my-location";
+/** 選択中の避難場所。点より上に重ねる。 */
 const SELECTED_SOURCE_ID = "selected-shelter";
 
 /**
- * 地図で指した地点の色。現在地の青とも、種別の橙・青（lib/kinds.ts）とも
- * 混ざらない色を使う。**現在地と指した地点は意味が違う**ので、
- * 形（丸とピン）と色の両方で分けて、取り違えさせない。
+ * 起点（あなたの場所）の色と形。ピンと、選んでいない拠点の印に使う。
+ *
+ * **星＋黄。** 星は「保存したもの」の慣習どおりで、保存・共有の帯（淡い黄）とも
+ * 色の筋がそろう。避難場所の橙（#ea580c）と近いのが唯一の懸念なので、
+ * より黄寄りの色にして、形（星と丸）と白縁でも差を付ける。
+ *
+ * 緑にしていた時期があるが、あれは「残っていた色域」という消去法の理由で、
+ * しかも防災の文脈では「安全・OK」に読める。指しているのは自宅であって
+ * 安全な場所ではない。
  */
-const PICKED_COLOR = "#047857";
+const PICKED_COLOR = "#f59e0b";
+
+/**
+ * 現在地の色。指定避難所の青（#1d4ed8）と紛れないよう、青緑に寄せる。
+ * 形（照準）と合わせて、避難場所の点とは二重に分ける。
+ */
+const MY_LOCATION_COLOR = "#0891b2";
 
 type Status =
-  /** 起点がまだ決まっておらず、避難場所を描いていない状態 */
-  | { state: "noOrigin" }
-  /** 起点はあるがズームが浅く、避難場所を描いていない状態 */
-  | { state: "zoomedOut" }
+  /** 範囲が広すぎて、サーバーが点ではなく集計を返した状態 */
+  | { state: "tooWide" }
   | { state: "loading" }
   | { state: "ready"; result: SheltersResult }
   | { state: "error"; message: string };
@@ -119,33 +131,39 @@ type Status =
 export default function ShelterMap() {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
-  const markersRef = useRef<Marker[]>([]);
-  /** 地図で指した地点のピン。クラスタの HTML マーカーとは寿命が別なので分けて持つ。 */
+  /** 起点のピン。1本だけ作って、置く・外すを繰り返す。 */
   const pinRef = useRef<Marker | null>(null);
+  /** 起点になっていない拠点の印。拠点が変わるたびに作り直す。 */
+  const placeMarkersRef = useRef<Marker[]>([]);
+  /** 現在地の印。拠点と同じく、起点でなくても出し続ける。 */
+  const myMarkerRef = useRef<Marker | null>(null);
+  /** Marker は地図を作る effect の中でしか import していないので、外から使えるよう控える。 */
+  const markerCtorRef = useRef<typeof Marker | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** 「元に戻す」を引っ込めるまでの時計 */
+  const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [status, setStatus] = useState<Status>({ state: "noOrigin" });
+  const [status, setStatus] = useState<Status>({ state: "loading" });
   const [filter, setFilter] = useState<ShelterFilter>({
     // 開いた瞬間に中身が入っていることを優先する。既定は絞り込みなし。
     kinds: ["EMERGENCY", "SHELTER"],
     disaster: null,
   });
 
-  const [panel, setPanel] = useState<PanelState>({ state: "closed" });
+  /**
+   * パネルに出しているもの。**操作も結果もここ1本で持つ。**
+   * 起点がまだ無いあいだは、どの値であってもパネル側が案内を出す。
+   */
+  const [view, setView] = useState<PanelView>({ state: "summary" });
+  /** 狭い画面で見出しだけに畳んでいるか（地図を広く見たいとき） */
+  const [collapsed, setCollapsed] = useState(false);
   /**
    * 近い順の起点。現在地ボタンで取ったものと地図で指したものを1つの state に
    * まとめ、どちらなのかを source で持つ。起点は常に1つなので、
    * 2つ持って「どちらが勝つか」を決める必要がない。
    */
-  const [origin, setOrigin] = useState<Origin | null>(null);
-  /**
-   * 「地図から選ぶ」モード。地図の素のクリックに常時ぶら下げると、
-   * パン操作と誤爆する（とくにスマホ）。押したときだけ地点を置く。
-   */
-  const [picking, setPicking] = useState(false);
-  /** 避難場所を描かないズーム域にいるか。初期状態（全国）は必ずここから始まる。 */
-  const [lowZoom, setLowZoom] = useState(true);
+  const [pickedOrigin, setPickedOrigin] = useState<Origin | null>(null);
 
   /**
    * 保存した拠点。正本は URL、localStorage はその写し。
@@ -156,11 +174,39 @@ export default function ShelterMap() {
     placesStore.getSnapshot,
     placesStore.getServerSnapshot,
   );
+
+  /**
+   * 2回目以降は、開いた時点で拠点が起点になる。
+   *
+   * 拠点を持っている人が、全国の地図から始めて自分で寄り直す理由は無い。
+   * URL で届いた拠点でも同じで、送られた人はその場所を見たくて開いている。
+   * 拠点を1つも持っていないときだけ全国から始める（どこを出すべきか分からないので、
+   * 適当な都市を出すと「なぜここ？」になる）。
+   */
+  const firstPlace = places[0];
+  const autoOrigin: Origin | null = useMemo(
+    () =>
+      firstPlace
+        ? {
+            lat: firstPlace.lat,
+            lng: firstPlace.lng,
+            source: "saved",
+            name: firstPlace.name,
+          }
+        : null,
+    [firstPlace],
+  );
   /** 起点を拠点として保存する最中 */
   const [saving, setSaving] = useState(false);
   /** 共有・印刷のシートを開いている最中 */
   const [sharing, setSharing] = useState(false);
+  /** 直前に消した拠点。しばらくのあいだ戻せるようにしておく */
+  const [removedPlace, setRemovedPlace] = useState<Place | null>(null);
   const [selected, setSelected] = useState<LatLng | null>(null);
+  /** 実際の起点。自分で決めたものが優先で、無ければ拠点の1つ目。 */
+  const origin = pickedOrigin ?? autoOrigin;
+  /** 最後に取れた現在地。起点とは別に持ち、地図には出し続ける。 */
+  const [myLocation, setMyLocation] = useState<LatLng | null>(null);
   const [locating, setLocating] = useState(false);
   const [locateError, setLocateError] = useState<string | null>(null);
   // 地図に足したソースへ setData できるようになった時点。
@@ -170,15 +216,10 @@ export default function ShelterMap() {
   // 絞り込みを変えるたびに地図が作り直される。ref で最新を渡す。
   const filterRef = useRef(filter);
   const loadRef = useRef<(() => void) | null>(null);
-  // 地図に登録したハンドラからモードを読むための最新値。
-  const pickingRef = useRef(picking);
   // load() から起点を読むための最新値。filter と同じ理由で ref に置く。
   const originRef = useRef(origin);
-
-  const clearMarkers = useCallback(() => {
-    for (const marker of markersRef.current) marker.remove();
-    markersRef.current = [];
-  }, []);
+  /** いま避難場所の点が地図に出ているか。地図を押したときの意味をこれで決める。 */
+  const pointsShownRef = useRef(false);
 
   useEffect(() => {
     let disposed = false;
@@ -203,8 +244,8 @@ export default function ShelterMap() {
       const map = new Map({
         container: containerRef.current,
         style: MAP_STYLE,
-        bounds: JAPAN_BOUNDS,
-        fitBoundsOptions: { padding: 8 },
+        center: SAMPLE_VIEW.center,
+        zoom: SAMPLE_VIEW.zoom,
         minZoom: 3,
         maxZoom: 18,
         maxBounds: MAX_BOUNDS,
@@ -226,25 +267,6 @@ export default function ShelterMap() {
       );
 
       const load = async () => {
-        /*
-          避難場所を描くのは、起点が決まってから。
-          場所を決める前に点を出しても、どれが自分に関係あるのか分からず、
-          地図が円で埋まって場所を指すことすらできなくなる。
-          引いたままの画面でも描かない（全国の集計クエリは重く、結果も読めない）。
-        */
-        if (!originRef.current || map.getZoom() < MIN_DATA_ZOOM) {
-          abortRef.current?.abort();
-          clearMarkers();
-          map.getSource<GeoJSONSource>(SOURCE_ID)?.setData({
-            type: "FeatureCollection",
-            features: [],
-          });
-          setStatus({
-            state: originRef.current ? "zoomedOut" : "noOrigin",
-          });
-          return;
-        }
-
         const bounds = map.getBounds();
         const bbox = [
           bounds.getWest(),
@@ -269,6 +291,7 @@ export default function ShelterMap() {
         const controller = new AbortController();
         abortRef.current = controller;
         setStatus({ state: "loading" });
+        pointsShownRef.current = false;
 
         try {
           const res = await fetch(`/api/shelters?${query}`, {
@@ -278,7 +301,13 @@ export default function ShelterMap() {
           const result: SheltersResult = await res.json();
           if (disposed) return;
 
-          clearMarkers();
+          /*
+            **点が出ているかどうかを、地図を押したときの意味とそろえる。**
+            押せば置ける状態なのに避難場所が見えない、という食い違いを無くす。
+            点が出るかどうかはズームではなく件数で決まる（同じ z12 でも都心と
+            地方で違う）ので、ズームの数字ではなく実際の結果で判定する。
+          */
+          pointsShownRef.current = result.mode === "points";
 
           const source = map.getSource<GeoJSONSource>(SOURCE_ID);
           if (source) {
@@ -298,21 +327,11 @@ export default function ShelterMap() {
             });
           }
 
-          if (result.mode === "clusters") {
-            markersRef.current = result.clusters.map((c) => {
-              const element = clusterElement(c.count, () => {
-                map.easeTo({
-                  center: [c.lng, c.lat],
-                  zoom: Math.min(map.getZoom() + 2, 18),
-                });
-              });
-              return new Marker({ element })
-                .setLngLat([c.lng, c.lat])
-                .addTo(map);
-            });
-          }
-
-          setStatus({ state: "ready", result });
+          setStatus(
+            result.mode === "clusters"
+              ? { state: "tooWide" }
+              : { state: "ready", result },
+          );
         } catch (error) {
           if (controller.signal.aborted || disposed) return;
           setStatus({
@@ -360,45 +379,85 @@ export default function ShelterMap() {
         // 詳細は吹き出しではなく下段のパネルに出す。スマホで指と吹き出しが
         // 重なるのを避けたいのと、近い順の一覧と表示を使い回せるため。
         map.on("click", LAYER_ID, (event) => {
-          // 場所を決めている最中は詳細を開かない。下段が確定バーに変わっており、
-          // そこへ一覧や詳細を重ねると何を操作しているのか分からなくなる。
-          if (pickingRef.current) return;
           const feature = event.features?.[0];
           if (!feature) return;
           const { id } = feature.properties as { id: string };
           const [lng, lat] = (feature.geometry as GeoJSON.Point).coordinates;
           setSelected({ lat, lng });
-          setPanel({ state: "detail", id, from: "list" });
+          setView({ state: "detail", id, from: "list" });
         });
+        /*
+          地図を押したときの意味は、**避難場所が出ているかどうかで変える**。
+
+          広い画面で押した1点は精度が出ないので、そこにピンを置いても直す手間が増える。
+          出ていないうちは「押した場所に寄る」だけにして、避難場所が見えてから置く。
+          「適当に押す → 寄る → もう一度押す → 置く」で、ドラッグは最後の数十 m だけになる。
+
+          出ているかどうかを基準にすると、**置ける状態なら必ず避難場所が見えている**。
+          ズームの数字で切ると、件数しだいで「押せるのに何も見えない」が起きる。
+
+          避難場所の点の上を押したときは、こちらではなく詳細（LAYER_ID のハンドラ）が拾う。
+        */
+        map.on("click", (event) => {
+          const { lat, lng } = event.lngLat;
+
+          // 避難場所がまだ出ていない＝広すぎる。押した場所に寄るだけにする。
+          if (!pointsShownRef.current) {
+            map.easeTo({
+              center: [lng, lat],
+              zoom: map.getZoom() + ZOOM_STEP,
+              duration: 400,
+            });
+            return;
+          }
+
+          // 点の上を押したときは詳細を開く側に任せる。
+          if (map.queryRenderedFeatures(event.point, { layers: [LAYER_ID] }).length) {
+            return;
+          }
+
+          // 置くときは地図を動かさない。押した場所が目の前にあるのに、
+          // 勝手に寄ったり中央に寄せたりすると、どこを押したのか見失う。
+          setSelected(null);
+          setPickedOrigin({ lat, lng, source: "picked" });
+          setView({ state: "list" });
+        });
+
         map.on("mouseenter", LAYER_ID, () => {
-          if (pickingRef.current) return;
           map.getCanvas().style.cursor = "pointer";
         });
         map.on("mouseleave", LAYER_ID, () => {
-          if (pickingRef.current) return;
           map.getCanvas().style.cursor = "";
         });
 
-        // 描くズーム域に入ったかどうかだけを React に伝える。
-        // 値が変わらなければ再描画は起きないので、ズーム中に毎フレーム呼んでよい。
-        map.on("zoom", () => setLowZoom(map.getZoom() < MIN_DATA_ZOOM));
+        /*
+          起点のピン。**ドラッグで直せる。**
+          「地図から選ぶ」モードに切り替えて十字を合わせる形はやめた。
+          住所か現在地でその場所まで来ているのに、モードを切り替えて
+          そこでまた住所や地名を選ばせるのは、同じ仕事を二重にやらせていた。
+          ずらしたいのは数十 m なので、つまんで動かすほうが速い。
 
-        // ピンは1本だけ作って、置く・外すを繰り返す。
-        // しずく形の先端は、回転で中心から真下に対角の半分（約13px）ずれる。
-        // その分だけ持ち上げて、先端が指した座標に重なるようにする。
-        pinRef.current = new Marker({
+          SVG の先端（下端の中央）を座標に合わせるので、anchor は bottom。
+        */
+        markerCtorRef.current = Marker;
+
+        const pin = new Marker({
           element: pinElement(),
-          anchor: "center",
-          offset: [0, -13],
+          anchor: "bottom",
+          draggable: true,
         });
+        pin.on("dragend", () => {
+          const { lat, lng } = pin.getLngLat();
+          // 動かした時点で「保存した拠点そのもの」ではなくなるので、名前は外す。
+          setPickedOrigin({ lat, lng, source: "picked" });
+        });
+        pinRef.current = pin;
 
-        // 現在地と選択中の点。中身は別の effect から setData で入れる。
-        for (const id of [ME_SOURCE_ID, SELECTED_SOURCE_ID]) {
-          map.addSource(id, {
-            type: "geojson",
-            data: { type: "FeatureCollection", features: [] },
-          });
-        }
+        // 選択中の避難場所。中身は別の effect から setData で入れる。
+        map.addSource(SELECTED_SOURCE_ID, {
+          type: "geojson",
+          data: { type: "FeatureCollection", features: [] },
+        });
         map.addLayer({
           id: SELECTED_SOURCE_ID,
           type: "circle",
@@ -409,17 +468,6 @@ export default function ShelterMap() {
             "circle-opacity": 0,
             "circle-stroke-width": 3,
             "circle-stroke-color": "#18181b",
-          },
-        });
-        map.addLayer({
-          id: ME_SOURCE_ID,
-          type: "circle",
-          source: ME_SOURCE_ID,
-          paint: {
-            "circle-radius": 7,
-            "circle-color": "#2563eb",
-            "circle-stroke-width": 3,
-            "circle-stroke-color": "#ffffff",
           },
         });
         setMapReady(true);
@@ -440,16 +488,21 @@ export default function ShelterMap() {
     return () => {
       disposed = true;
       if (timerRef.current) clearTimeout(timerRef.current);
+      if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
       abortRef.current?.abort();
-      clearMarkers();
       pinRef.current?.remove();
       pinRef.current = null;
+      for (const marker of placeMarkersRef.current) marker.remove();
+      placeMarkersRef.current = [];
+      myMarkerRef.current?.remove();
+      myMarkerRef.current = null;
+      markerCtorRef.current = null;
       loadRef.current = null;
       setMapReady(false);
       mapRef.current?.remove();
       mapRef.current = null;
     };
-  }, [clearMarkers]);
+  }, []);
 
   // 絞り込みが変わったら取り直す。初回は地図の load がまだなので loadRef が空で、
   // その場合は load 側の初回呼び出しが拾う。
@@ -462,41 +515,30 @@ export default function ShelterMap() {
   useEffect(() => {
     originRef.current = origin;
     loadRef.current?.();
+
+    // 地図を押せば置ける／寄れることをカーソルで見せる。
+    const canvas = mapRef.current?.getCanvas();
+    if (canvas) canvas.style.cursor = "crosshair";
   }, [origin]);
 
-  // 起点の描き分け。現在地は青い丸、指した地点はピン。同じ表示にしない。
+  /*
+    起点のピン。**決め方に関係なく、起点があれば必ず出す。**
+    以前は「地図で指したとき」だけ出していたので、保存した拠点を選んでも
+    現在地を取っても、地図に何も出ていなかった。
+  */
   useEffect(() => {
     if (!mapReady) return;
     const map = mapRef.current;
-    if (!map) return;
-
-    map
-      .getSource<GeoJSONSource>(ME_SOURCE_ID)
-      ?.setData(pointFeatures(origin?.source === "gps" ? origin : null));
-
     const pin = pinRef.current;
-    if (!pin) return;
-    if (origin?.source === "picked") {
+    if (!map || !pin) return;
+
+    if (origin) {
       pin.setLngLat([origin.lng, origin.lat]).addTo(map);
     } else {
       pin.remove();
     }
   }, [mapReady, origin]);
 
-  // 地図に登録済みのハンドラから読めるようにしておく。
-  useEffect(() => {
-    pickingRef.current = picking;
-  }, [picking]);
-
-  // 押す先を探しているうちに気が変わることがあるので、Esc でやめられるようにする。
-  useEffect(() => {
-    if (!picking) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setPicking(false);
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [picking]);
 
   useEffect(() => {
     if (!mapReady) return;
@@ -516,50 +558,107 @@ export default function ShelterMap() {
     });
   }, []);
 
-  /**
-   * 選んだ都道府県・市区町村の範囲へ飛ぶ。
-   *
-   * 外接矩形にそのまま合わせると、避難場所が1点しかない市町村では
-   * 際限なく寄り、面積の広い市町村では避難場所を描かないズームまで引く。
-   * どちらも上限・下限で止める。
-   */
-  const jumpTo = useCallback((area: AreaBounds) => {
-    const map = mapRef.current;
-    if (!map) return;
-    const camera = map.cameraForBounds(
-      [
-        [area.minLng, area.minLat],
-        [area.maxLng, area.maxLat],
-      ],
-      { padding: 32, maxZoom: 14 },
-    );
-    if (!camera?.center) return;
-    map.easeTo({
-      center: camera.center,
-      zoom: Math.max(camera.zoom ?? MIN_DATA_ZOOM, MIN_DATA_ZOOM),
-      duration: 600,
-    });
-  }, []);
-
   /** 保存した拠点を起点にする。座標は保存時に丸めてあるので、そのまま使う。 */
   const selectPlace = useCallback((place: Place) => {
-    setPicking(false);
-    setOrigin({
+    setPickedOrigin({
       lat: place.lat,
       lng: place.lng,
       source: "saved",
       name: place.name,
     });
     // 拠点は「8種 × 最寄り」の表から始める。ここが持ち帰るものなので。
-    setPanel({ state: "summary" });
+    setView({ state: "summary" });
     const map = mapRef.current;
     if (map) liftAboveSheet(map, place, 14);
   }, []);
+
+  /*
+    拠点が起点になったときは、そこから始める。
+    例の場所から飛んでいく様子を見せる必要はないので、アニメーションは挟まない。
+  */
+  useEffect(() => {
+    if (!mapReady || pickedOrigin || !autoOrigin) return;
+    const map = mapRef.current;
+    if (map) liftAboveSheet(map, autoOrigin, 14, true);
+  }, [mapReady, pickedOrigin, autoOrigin]);
+
+  /*
+    現在地が分かっているあいだは、拠点と同じように地図に出し続ける。
+    起点を自宅に切り替えたあとでも「いま自分がどこにいるか」は残したいし、
+    押せば現在地に戻せる。起点になっているときは大きいピンのほうで出ているので描かない。
+  */
+  useEffect(() => {
+    if (!mapReady) return;
+    const map = mapRef.current;
+    const Ctor = markerCtorRef.current;
+    if (!map || !Ctor) return;
+
+    myMarkerRef.current?.remove();
+    myMarkerRef.current = null;
+
+    if (!myLocation || origin?.source === "gps") return;
+
+    const marker = new Ctor({
+      element: myLocationElement(() => {
+        setPickedOrigin({ ...myLocation, source: "gps" });
+        setView({ state: "list" });
+        liftAboveSheet(map, myLocation, 14);
+      }),
+      anchor: "left",
+    })
+      .setLngLat([myLocation.lng, myLocation.lat])
+      .addTo(map);
+    myMarkerRef.current = marker;
+  }, [mapReady, myLocation, origin]);
+
+  /*
+    選んでいない拠点も地図に出す。**どこに登録したのかが地図で分かる**ようにし、
+    押せばそのまま起点を切り替えられる。起点になっている拠点は大きいピンのほうで
+    出ているので、ここでは描かない。
+  */
+  useEffect(() => {
+    if (!mapReady) return;
+    const map = mapRef.current;
+    const Ctor = markerCtorRef.current;
+    if (!map || !Ctor) return;
+
+    for (const marker of placeMarkersRef.current) marker.remove();
+    placeMarkersRef.current = places
+      .filter((place) => !origin || !findPlaceAt([place], origin))
+      .map((place) =>
+        new Ctor({
+          element: placeElement(place.name, () => selectPlace(place)),
+          // 要素の左端＝印の中心が座標に重なる。名前は右へ伸ばす。
+          anchor: "left",
+        })
+          .setLngLat([place.lng, place.lat])
+          .addTo(map),
+      );
+  }, [mapReady, places, origin, selectPlace]);
 
   /**
    * いまの起点を拠点として保存する。
    * 同じ名前と同じ地点は置き換える（「自宅」が2つある状態を作らない）。
    */
+  /**
+   * 拠点を消す。**すぐ消えて終わりにしない。**
+   * 自分で作ったものが1タップで消え、URL まで書き換わるので、
+   * しばらくのあいだ戻せる状態を残す。
+   */
+  const removePlace = useCallback((place: Place) => {
+    placesStore.removePlace(place.name);
+    setRemovedPlace(place);
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    undoTimerRef.current = setTimeout(() => setRemovedPlace(null), 12_000);
+  }, []);
+
+  const undoRemove = useCallback(() => {
+    setRemovedPlace((place) => {
+      if (place) placesStore.savePlace(place);
+      return null;
+    });
+  }, []);
+
   const savePlace = useCallback(
     (name: string) => {
       setSaving(false);
@@ -568,43 +667,19 @@ export default function ShelterMap() {
       if (!place) return;
 
       placesStore.savePlace(place);
-      setOrigin({ ...place, source: "saved", name: place.name });
-      setPanel({ state: "summary" });
+      setPickedOrigin({ ...place, source: "saved", name: place.name });
+      setView({ state: "summary" });
     },
     [origin],
   );
 
-  /** 住所の候補や拠点など、決まった1点に寄る。 */
-  const jumpToPoint = useCallback((point: LatLng, zoom = 15) => {
-    mapRef.current?.easeTo({
-      center: [point.lng, point.lat],
-      zoom,
-      duration: 600,
-    });
-  }, []);
-
-  /** 場所を決めるモードに入る。下段は確定バーに譲るので、一覧は閉じる。 */
-  const startPicking = useCallback(() => {
-    setPicking(true);
-    setPanel({ state: "closed" });
-    setSelected(null);
-  }, []);
-
-  /**
-   * 画面中央を起点にする。
-   *
-   * 地図を押して置く方式はやめた。押した場所が指で隠れるうえ、
-   * 全国ビューからは目的の街に当てられず、パン操作とも誤爆する。
-   * 地図を動かして十字に合わせるほうが、片手でも狙いを詰められる。
-   */
-  const confirmPick = useCallback(() => {
+  /** 住所の候補を選んだら、そのまま起点にする。町丁目の代表点に置く。 */
+  const pickAddress = useCallback((hit: { lat: number; lng: number }) => {
+    const point = { lat: hit.lat, lng: hit.lng };
+    setPickedOrigin({ ...point, source: "picked" });
+    setView({ state: "list" });
     const map = mapRef.current;
-    if (!map) return;
-    const { lat, lng } = map.getCenter();
-    setPicking(false);
-    setOrigin({ lat, lng, source: "picked" });
-    setPanel({ state: "list" });
-    liftAboveSheet(map, { lat, lng });
+    if (map) liftAboveSheet(map, point, 15);
   }, []);
 
   /**
@@ -619,7 +694,6 @@ export default function ShelterMap() {
 
     setLocating(true);
     setLocateError(null);
-    setPicking(false);
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const here = {
@@ -627,8 +701,9 @@ export default function ShelterMap() {
           lng: position.coords.longitude,
         };
         setLocating(false);
-        setOrigin({ ...here, source: "gps" });
-        setPanel({ state: "list" });
+        setMyLocation(here);
+        setPickedOrigin({ ...here, source: "gps" });
+        setView({ state: "list" });
         // 徒歩圏が見える程度まで寄る。点のまま返る件数に収まるズーム。
         const map = mapRef.current;
         if (map) liftAboveSheet(map, here, 14);
@@ -641,14 +716,11 @@ export default function ShelterMap() {
     );
   }, []);
 
-  // 起点が無いあいだの案内。避難場所も描いていないので、隠してしまうものは無い。
-  const showStartCard = origin === null && !picking;
   /** いまの起点が、すでに拠点として保存されているか。 */
   const savedHere = origin ? findPlaceAt(places, origin) : undefined;
 
   return (
     <>
-      <ShelterFilterBar value={filter} onChange={setFilter} />
       <div className="relative min-h-0 flex-1">
         {/*
           地図のコンテナに `absolute inset-0` は使えない。MapLibre は要素に
@@ -659,137 +731,56 @@ export default function ShelterMap() {
         */}
         <div ref={containerRef} className="size-full" />
 
-        <div className="pointer-events-none absolute inset-x-0 top-0 flex flex-col items-start gap-2 p-3">
-          {!showStartCard && !picking && (
-            <button
-              type="button"
-              onClick={() => {
-                setOrigin(null);
-                setPanel({ state: "closed" });
-                setSelected(null);
-              }}
-              className="pointer-events-auto rounded-full bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white shadow-sm"
-            >
-              場所を変える
-            </button>
-          )}
-          {locateError && <Chip>{locateError}</Chip>}
-          {!picking && !showStartCard && <StatusChip status={status} />}
+        {/*
+          地図に重ねるのは「地図の一部」だけにする。十字・ピン・現在地・件数がそれで、
+          操作ボタンは置かない（操作はパネルに集めた）。
+        */}
+        <div className="pointer-events-none absolute inset-x-0 top-0 flex flex-col items-start gap-2 p-3 md:pl-[21rem] lg:pl-[25rem]">
+          <StatusChip status={status} />
         </div>
 
         {/*
-          開いた直後の画面。全国の点を出す代わりに、ここで場所を決めてもらう。
-          選択肢は2つだけにして、既定は現在地（1タップで終わる）。
+          現在地はいつでも押せるようにする。パネルの状態に左右されない場所として、
+          ズーム（MapLibre の NavigationControl・右上）の真下に置き、
+          地図の操作系としてまとめる。下に置くと、スマホでは下のシートに隠れる。
+
+          **記号だけにしない。** 照準の記号は地図アプリの慣習どおりだが、
+          タッチ端末では title が出ないので、記号を知らない人には手がかりが無くなる。
+          文字を添えて、高さも 29px（ズームと同じ）から 40px に上げ、指で押せる大きさにする。
         */}
-        {showStartCard && (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-4">
-            <div className="pointer-events-auto w-full max-w-xs rounded-xl border border-zinc-200 bg-white/95 p-4 shadow-lg backdrop-blur-sm">
-              <p className="text-sm leading-snug font-semibold text-zinc-900">
-                まず、調べたい場所を決めます
-              </p>
-              <p className="mt-1 text-xs leading-relaxed text-zinc-500">
-                その場所から、災害の種類ごとに使える避難場所を近い順に出します。
-              </p>
+        <button
+          type="button"
+          onClick={locate}
+          disabled={locating}
+          aria-label="現在地から探す"
+          className="absolute top-[76px] right-2.5 z-10 flex h-10 items-center gap-1.5 rounded-full border border-black/10 bg-white px-3 text-xs font-medium text-zinc-800 shadow-sm transition-colors hover:bg-zinc-50 disabled:opacity-60"
+        >
+          <LocateIcon active={locating} />
+          {locating ? "取得中…" : "現在地"}
+        </button>
 
-              {/*
-                保存した拠点を先頭に置く。2回目以降はここを1回押せば終わる、
-                というのが生活拠点モデルの入口（.local/PLAN.md「利用シーンの整理」）。
-              */}
-              {places.length > 0 && (
-                <div className="mt-3 flex flex-col gap-1.5">
-                  {places.map((place) => (
-                    <div key={place.name} className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => selectPlace(place)}
-                        className="min-w-0 flex-1 rounded-lg border border-zinc-300 px-3 py-2 text-left text-sm font-medium text-zinc-900 transition-colors hover:bg-zinc-50"
-                      >
-                        {place.name}
-                      </button>
-                      <button
-                        type="button"
-                        aria-label={`${place.name}を削除`}
-                        onClick={() => placesStore.removePlace(place.name)}
-                        className="shrink-0 rounded px-2 py-1 text-xs text-zinc-400 hover:text-zinc-900"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => setSharing(true)}
-                    className="mt-0.5 self-start text-[11px] text-zinc-500 underline underline-offset-2 hover:text-zinc-900"
-                  >
-                    家族に送る・紙に出す（QR コード）
-                  </button>
-                </div>
-              )}
-
-              <button
-                type="button"
-                onClick={locate}
-                disabled={locating}
-                className="mt-3 w-full rounded-lg bg-zinc-900 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-800 disabled:opacity-60"
-              >
-                {locating ? "現在地を取得中…" : "現在地から探す"}
-              </button>
-              <button
-                type="button"
-                onClick={startPicking}
-                className="mt-2 w-full rounded-lg px-3 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
-                style={{ backgroundColor: PICKED_COLOR }}
-              >
-                地図から選ぶ
-              </button>
-              <p className="mt-2 text-[11px] leading-relaxed text-zinc-400">
-                引っ越し先や実家など、いま居ない場所も選べます。
+        {/*
+          引き戻して避難場所が見えなくなったときの案内。
+          開いた直後は東京駅まわり（SAMPLE_VIEW）か拠点から始まるので、
+          この状態になるのは自分で引いたときだけ。だから"できない話"でも第一印象にならない。
+          枠は押しても地図に届く（＝そのまま寄れる）ようにしてある。
+        */}
+        {status.state === "tooWide" && (
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-4 md:pl-[21rem] lg:pl-[25rem]">
+            <div className="max-w-xs rounded-xl border border-zinc-200 bg-white/95 px-4 py-3 text-center shadow-lg backdrop-blur-sm">
+              <p className="text-sm font-semibold text-zinc-900">
+                この範囲は広すぎて、避難場所を出せません
+              </p>
+              <p className="mt-1 text-xs leading-relaxed text-zinc-600">
+                調べたい場所まで寄ってください。
+                <br />
+                <strong className="font-medium text-zinc-900">
+                  地図を押すと、その場所に寄ります。
+                </strong>
+                避難場所が出たら、押した場所にピンを置けます。
               </p>
             </div>
           </div>
-        )}
-
-        {/* 場所を決めているあいだ。十字は画面の中心＝地図の中心に重なる。 */}
-        {picking && (
-          <>
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-              <Crosshair />
-            </div>
-            <div className="absolute inset-x-0 bottom-0 border-t border-zinc-200 bg-white px-3 py-2.5 shadow-[0_-4px_16px_rgba(0,0,0,0.08)]">
-              <p className="text-xs leading-relaxed text-zinc-600">
-                調べたい場所を、中央の十字に合わせてください
-                {lowZoom && "（まだ広すぎます。下の選択か拡大で寄せてください）"}
-              </p>
-              {/*
-                全国から指で拡大していくのは手間が大きいので、名前から寄れる道を2つ出す。
-                住所を知っているときは上、地名しか分からないときは下。
-              */}
-              <div className="mt-2">
-                <AddressSearch onPick={(hit) => jumpToPoint(hit)} />
-              </div>
-              <div className="mt-1.5">
-                <RegionJump onJump={jumpTo} />
-              </div>
-              <div className="mt-2 flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setPicking(false)}
-                  className="rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-600"
-                >
-                  やめる
-                </button>
-                <button
-                  type="button"
-                  onClick={confirmPick}
-                  disabled={lowZoom}
-                  className="flex-1 rounded-lg px-3 py-2 text-sm font-medium text-white disabled:opacity-40"
-                  style={{ backgroundColor: PICKED_COLOR }}
-                >
-                  ここにする
-                </button>
-              </div>
-            </div>
-          </>
         )}
 
         {sharing && places.length > 0 && (
@@ -841,27 +832,29 @@ export default function ShelterMap() {
         )}
 
         <ShelterPanel
-          panel={picking ? { state: "closed" } : panel}
+          view={view}
           filter={filter}
-          origin={savedHere ? { ...origin!, name: savedHere.name } : origin}
+          origin={origin}
+          places={places}
+          locateError={locateError}
+          collapsed={collapsed}
+          onToggleCollapsed={() => setCollapsed((on) => !on)}
+          onShow={(state) => setView({ state })}
+          onChangeFilter={setFilter}
+          onPickAddress={pickAddress}
+          onSelectPlace={selectPlace}
+          onRemovePlace={(name) => {
+            const place = places.find((p) => p.name === name);
+            if (place) removePlace(place);
+          }}
+          removedPlace={removedPlace}
+          onUndoRemove={undoRemove}
           onSavePlace={
             origin && !savedHere && places.length < MAX_PLACES
               ? () => setSaving(true)
               : undefined
           }
-          onClose={() => {
-            setPanel({ state: "closed" });
-            setSelected(null);
-          }}
-          // 戻り先は、開いたときに見ていたほうにする。
-          onSelect={(item) =>
-            setPanel((current) => ({
-              state: "detail",
-              id: item.id,
-              from: current.state === "summary" ? "summary" : "list",
-            }))
-          }
-          onShow={(state) => setPanel({ state })}
+          onShare={() => setSharing(true)}
           onFocus={focus}
         />
       </div>
@@ -870,49 +863,50 @@ export default function ShelterMap() {
 }
 
 /**
- * 起点を画面の少し上に置き直す。真ん中に寄せると、開いた一覧のシートに隠れる。
+ * 起点がパネルに隠れない位置へ置き直す。
+ *
+ * パネルは狭い画面では下から、広い画面では左から出るので、避ける向きも変える。
+ * 判定は Tailwind の md（768px）とそろえる。
  */
-function liftAboveSheet(map: MapLibreMap, target: LatLng, zoom?: number) {
-  const lift = Math.round(map.getContainer().clientHeight * 0.18);
-  map.flyTo({
+function liftAboveSheet(
+  map: MapLibreMap,
+  target: LatLng,
+  zoom?: number,
+  instant = false,
+) {
+  const container = map.getContainer();
+  const wide = container.clientWidth >= 768;
+  const offset: [number, number] = wide
+    ? [Math.round(container.clientWidth * 0.16), 0]
+    : [0, -Math.round(container.clientHeight * 0.18)];
+
+  map.easeTo({
     center: [target.lng, target.lat],
     zoom: zoom ?? map.getZoom(),
-    // 指定した中心を、画面の中央より lift だけ上に置く。
-    offset: [0, -lift],
+    offset,
+    duration: instant ? 0 : 1200,
   });
 }
 
-/** 場所を決めるときの照準。地図の中心に重ねる。 */
-function Crosshair() {
+/** 現在地のアイコン。照準（十字＋中心の点）は地図アプリで共通の見た目。 */
+function LocateIcon({ active }: { active: boolean }) {
   return (
-    <svg width="44" height="44" viewBox="0 0 44 44" aria-hidden="true">
-      <circle
-        cx="22"
-        cy="22"
-        r="11"
-        fill="none"
-        stroke={PICKED_COLOR}
-        strokeWidth="2.5"
-        opacity="0.9"
-      />
-      <circle cx="22" cy="22" r="2" fill={PICKED_COLOR} />
-      {[
-        [22, 0, 22, 8],
-        [22, 36, 22, 44],
-        [0, 22, 8, 22],
-        [36, 22, 44, 22],
-      ].map(([x1, y1, x2, y2]) => (
-        <line
-          key={`${x1}-${y1}`}
-          x1={x1}
-          y1={y1}
-          x2={x2}
-          y2={y2}
-          stroke={PICKED_COLOR}
-          strokeWidth="2.5"
-          strokeLinecap="round"
-        />
-      ))}
+    <svg
+      width="17"
+      height="17"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={active ? "#a1a1aa" : MY_LOCATION_COLOR}
+      strokeWidth="2"
+      strokeLinecap="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="7" />
+      <circle cx="12" cy="12" r="1.6" fill={MY_LOCATION_COLOR} stroke="none" />
+      <line x1="12" y1="1.5" x2="12" y2="4.5" />
+      <line x1="12" y1="19.5" x2="12" y2="22.5" />
+      <line x1="1.5" y1="12" x2="4.5" y2="12" />
+      <line x1="19.5" y1="12" x2="22.5" y2="12" />
     </svg>
   );
 }
@@ -946,32 +940,120 @@ function pointFeatures(point: LatLng | null): GeoJSON.FeatureCollection {
 }
 
 /**
- * 指した地点のピン。地理院タイルはラスタでグリフを持たず symbol レイヤーが
- * 使えないので、クラスタと同じく HTML マーカーで描く。
- * 現在地の丸と形から違えるために、しずく形にして先端を地点に合わせる。
+ * 現在地の印。
+ *
+ * **丸にしない。** 塗りつぶしの丸は避難場所の点（橙・青）と同じ語彙で、
+ * 小さく描くと色しか手がかりが残らない。地図右上の「現在地」ボタンと同じ
+ * 照準の記号にして、色も指定避難所の青（#1d4ed8）から離した青緑にする。
+ * ボタンと地図上の印が同じ記号なので、押した結果とも結びつく。
+ * 押すと起点が現在地に戻る。
  */
+function myLocationElement(onClick: () => void): HTMLElement {
+  const el = document.createElement("button");
+  el.type = "button";
+  el.setAttribute("aria-label", "現在地に戻す");
+  el.style.cssText = [
+    "display:flex",
+    "align-items:center",
+    "gap:4px",
+    "padding:0",
+    "background:none",
+    "border:none",
+    "cursor:pointer",
+    // 記号の中心を座標に合わせる（anchor:left なので左端が座標）。
+    "transform:translateX(-11px)",
+  ].join(";");
+
+  el.innerHTML = [
+    '<svg width="22" height="22" viewBox="0 0 22 22" style="flex:none;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.35))">',
+    // 白い下敷き。淡色地図の上でも記号が沈まないようにする。
+    `<circle cx="11" cy="11" r="10" fill="#ffffff" opacity="0.9"/>`,
+    `<g stroke="${MY_LOCATION_COLOR}" stroke-width="2" stroke-linecap="round" fill="none">`,
+    '<circle cx="11" cy="11" r="5.5"/>',
+    '<line x1="11" y1="1.5" x2="11" y2="4"/>',
+    '<line x1="11" y1="18" x2="11" y2="20.5"/>',
+    '<line x1="1.5" y1="11" x2="4" y2="11"/>',
+    '<line x1="18" y1="11" x2="20.5" y2="11"/>',
+    "</g>",
+    `<circle cx="11" cy="11" r="2" fill="${MY_LOCATION_COLOR}"/>`,
+    "</svg>",
+    '<span style="padding:1px 6px;border-radius:9999px;background:rgba(255,255,255,0.92);border:1px solid rgba(82,82,91,0.25);color:#27272a;font-size:11px;font-weight:600;white-space:nowrap">現在地</span>',
+  ].join("");
+
+  el.addEventListener("click", onClick);
+  return el;
+}
+
+/**
+ * 起点になっていない拠点の印。名前が出ていないと、どれが自宅でどれが職場か分からない。
+ * 起点のピンより小さく・薄くして、いま見ている拠点との差を付ける。
+ */
+function placeElement(name: string, onClick: () => void): HTMLElement {
+  const el = document.createElement("button");
+  el.type = "button";
+  el.setAttribute("aria-label", `${name}に切り替える`);
+  el.style.cssText = [
+    "display:flex",
+    "align-items:center",
+    "gap:4px",
+    "padding:0",
+    "background:none",
+    "border:none",
+    "cursor:pointer",
+    // 印の中心を座標に合わせる（anchor:left なので左端が座標）。
+    "transform:translateX(-9px)",
+  ].join(";");
+
+  el.innerHTML = [
+    `<svg width="18" height="18" viewBox="0 0 18 18" style="flex:none;filter:drop-shadow(0 1px 1px rgba(0,0,0,0.35))">`,
+    `<path d="M9.0 1.0L11.1 6.2L16.6 6.5L12.3 10.1L13.7 15.5L9.0 12.5L4.3 15.5L5.7 10.1L1.4 6.5L6.9 6.2Z" fill="${PICKED_COLOR}" stroke="#ffffff" stroke-width="1.6" stroke-linejoin="round"/>`,
+    "</svg>",
+    `<span style="padding:1px 6px;border-radius:9999px;background:rgba(255,255,255,0.92);border:1px solid rgba(82,82,91,0.25);color:#27272a;font-size:11px;font-weight:600;white-space:nowrap">${name}</span>`,
+  ].join("");
+
+  el.addEventListener("click", onClick);
+  return el;
+}
+
+/**
+ * 起点のピン。地理院タイルはラスタでグリフを持たず symbol レイヤーが使えないので、
+ * クラスタと同じく HTML マーカーで描く。
+ *
+ * **避難場所の点と取り違えられない形と大きさにする。** 点は半径 3〜10px の丸で、
+ * 同じくらいの大きさの丸を置くと、色しか手がかりが無くなる。
+ * 地面に刺さった軸を持つ縦長の形にして、幅も倍以上にした。
+ * 先端（下端の中央）がそのまま座標を指すので、anchor は bottom で合う。
+ */
+const PIN_WIDTH = 30;
+const PIN_HEIGHT = 42;
+
 function pinElement(): HTMLElement {
   const el = document.createElement("div");
   el.setAttribute("aria-hidden", "true");
   el.style.cssText = [
-    "width:18px",
-    "height:18px",
-    "border-radius:50% 50% 50% 0",
-    "transform:rotate(-45deg)",
-    `background:${PICKED_COLOR}`,
-    "border:2px solid #ffffff",
-    "box-shadow:0 1px 3px rgba(0,0,0,0.35)",
+    `width:${PIN_WIDTH}px`,
+    `height:${PIN_HEIGHT}px`,
+    // ドラッグで動かせることを、カーソルでも見せる。
+    "cursor:grab",
+    "filter:drop-shadow(0 2px 3px rgba(0,0,0,0.35))",
   ].join(";");
+
+  el.innerHTML = [
+    `<svg width="${PIN_WIDTH}" height="${PIN_HEIGHT}" viewBox="0 0 30 42" xmlns="http://www.w3.org/2000/svg">`,
+    // しずく形。下端の (15,42) が指し示す点。
+    `<path d="M15 42C15 42 28 24 28 15A13 13 0 1 0 2 15C2 24 15 42 15 42Z"`,
+    ` fill="${PICKED_COLOR}" stroke="#ffffff" stroke-width="2.5"/>`,
+    // 中の白い星。「保存したもの」の印で、塗りつぶしの丸（避難場所の点）と見分く。
+    `<path d="M15.0 7.8L16.8 12.5L21.8 12.8L17.9 16.0L19.2 20.8L15.0 18.1L10.8 20.8L12.1 16.0L8.2 12.8L13.2 12.5Z" fill="#ffffff"/>`,
+    "</svg>",
+  ].join("");
+
   return el;
 }
 
 function StatusChip({ status }: { status: Status }) {
-  if (status.state === "noOrigin") {
-    return <Chip>場所を決めると、そこから近い順に出します</Chip>;
-  }
-  if (status.state === "zoomedOut") {
-    return <Chip>拡大すると、この範囲の避難場所が出ます</Chip>;
-  }
+  // 広すぎるときは、隅のチップではなく地図の中央の案内で言う。
+  if (status.state === "tooWide") return null;
   if (status.state === "loading") {
     return <Chip>読み込み中…</Chip>;
   }
@@ -985,9 +1067,6 @@ function StatusChip({ status }: { status: Status }) {
       この範囲に <strong className="font-semibold">
         {result.total.toLocaleString("ja-JP")}
       </strong> 件
-      {result.mode === "clusters" && (
-        <span className="text-zinc-500">（多いのでまとめて表示）</span>
-      )}
     </Chip>
   );
 }
@@ -1000,37 +1079,3 @@ function Chip({ children }: { children: React.ReactNode }) {
   );
 }
 
-/**
- * クラスタは HTML マーカーで描く。件数を地図上の文字で出すには
- * グリフ（フォントの pbf）の配信元が要るが、地理院タイルはラスタで
- * グリフを持たないため、symbol レイヤーが使えない。
- */
-function clusterElement(count: number, onClick: () => void): HTMLElement {
-  const size = Math.round(28 + 14 * Math.log10(count));
-  const el = document.createElement("button");
-  el.type = "button";
-  el.textContent = formatCount(count);
-  el.setAttribute("aria-label", `${count.toLocaleString("ja-JP")}件。拡大する`);
-  el.style.cssText = [
-    `width:${size}px`,
-    `height:${size}px`,
-    "display:flex",
-    "align-items:center",
-    "justify-content:center",
-    "border-radius:9999px",
-    "background:rgba(255,255,255,0.92)",
-    "border:2px solid #52525b",
-    "color:#27272a",
-    "font-size:11px",
-    "font-weight:600",
-    "cursor:pointer",
-  ].join(";");
-  el.addEventListener("click", onClick);
-  return el;
-}
-
-function formatCount(count: number): string {
-  if (count >= 10000) return `${Math.round(count / 1000)}k`;
-  if (count >= 1000) return `${(count / 1000).toFixed(1)}k`;
-  return String(count);
-}

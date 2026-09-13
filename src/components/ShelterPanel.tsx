@@ -2,30 +2,34 @@
 
 import { useEffect, useState } from "react";
 
+import AddressSearch from "@/components/AddressSearch";
 import ShelterDetailView from "@/components/ShelterDetailView";
+import ShelterFilterBar from "@/components/ShelterFilterBar";
 import { disasterLabel } from "@/lib/disasters";
 import { formatDistance } from "@/lib/format";
+import type { GeocodeHit } from "@/lib/geocode";
 import { kindOf } from "@/lib/kinds";
 import type { LatLng, NearbyItem, NearbyResult } from "@/lib/nearby";
 import type { PlaceSummary } from "@/lib/place-summary";
+import type { Place } from "@/lib/places";
 import type { ShelterDetail } from "@/lib/shelter-detail";
 import type { ShelterFilter } from "@/lib/shelters";
 
 /**
- * 一覧と詳細を出す下段のパネル。
+ * 操作と結果をまとめて置くパネル。狭い画面では下のシート、広い画面では左の柱。
  *
- * 詳細を地図のポップアップではなくここに出しているのは、スマホで指と吹き出しが
- * 重なるのを避けるためと、一覧の行と詳細で同じ表示を使い回せるため。
+ * **地図に重ねる操作は持たない。** 以前は「場所を決める」が中央のカード・下のバー・
+ * 左上のボタンに散っていて、同じ仕事なのに見る場所が毎回変わっていた。
+ * ここに集めて、地図には地図の一部（十字・ピン・現在地・件数）だけを残す。
  */
-export type PanelState =
-  | { state: "closed" }
+export type PanelView =
   /** 災害8種ぶんの最寄りをまとめた表。拠点の「持ち帰れるもの」 */
   | { state: "summary" }
   | { state: "list" }
   | { state: "detail"; id: string; from: "summary" | "list" };
 
 /**
- * 近い順の起点。現在地ボタンで取ったもの（gps）・地図で指したもの（picked）・
+ * 近い順の起点。現在地ボタンで取ったもの（gps）・地図や住所で指したもの（picked）・
  * 保存した拠点（saved）は意味が違う。「現在地から近い順」と言い切れるのは
  * 最初のものだけなので、座標だけでなく出どころも一緒に持ち回す。
  */
@@ -41,112 +45,303 @@ function originLabel(origin: Origin | null): string {
   return origin?.source === "picked" ? "指した地点" : "現在地";
 }
 
+const TITLES = {
+  /** 起点がまだ無いとき */
+  start: "場所を決める",
+  detail: "施設の詳細",
+} as const;
+
 export default function ShelterPanel({
-  panel,
+  view,
   filter,
   origin,
-  onSavePlace,
-  onClose,
-  onSelect,
+  places,
+  locateError,
+  collapsed,
+  onToggleCollapsed,
   onShow,
+  onChangeFilter,
+  onPickAddress,
+  onSelectPlace,
+  onRemovePlace,
+  removedPlace,
+  onUndoRemove,
+  onSavePlace,
+  onShare,
   onFocus,
 }: {
-  panel: PanelState;
+  view: PanelView;
   filter: ShelterFilter;
-  /** 近い順の起点。null なら一覧は出せない */
+  /** 近い順の起点。null なら表と一覧は出せない */
   origin: Origin | null;
+  places: Place[];
+  locateError: string | null;
+  /** 狭い画面で見出しだけに畳んでいるか。地図を広く見たいときのため */
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
+  onShow: (state: "summary" | "list") => void;
+  onChangeFilter: (next: ShelterFilter) => void;
+  onPickAddress: (hit: GeocodeHit) => void;
+  onSelectPlace: (place: Place) => void;
+  onRemovePlace: (name: string) => void;
+  /** 直前に消した拠点。しばらくは戻せるようにしておく */
+  removedPlace: Place | null;
+  onUndoRemove: () => void;
   /** 起点をまだ拠点にしていないときだけ渡す */
   onSavePlace?: () => void;
-  onClose: () => void;
-  onSelect: (item: NearbyItem) => void;
-  /** 表・一覧の切り替えと、詳細からの戻り */
-  onShow: (state: "summary" | "list") => void;
+  onShare: () => void;
   onFocus: (target: LatLng) => void;
 }) {
-  if (panel.state === "closed") return null;
+  const reading = origin !== null && view.state !== "detail";
+  /** いま見ている場所を拠点にできるか（すでに拠点なら出さない） */
+  const showSave = reading && Boolean(onSavePlace);
+  /** 送れるものがあるか */
+  const showShare = places.length > 0;
 
   return (
-    <div className="pointer-events-auto absolute inset-x-0 bottom-0 flex max-h-[60%] flex-col rounded-t-xl border-t border-zinc-200 bg-white shadow-[0_-4px_16px_rgba(0,0,0,0.08)]">
-      <div className="flex shrink-0 items-center gap-2 border-b border-zinc-100 px-3 py-2">
-        {panel.state === "detail" ? (
-          <>
-            <button
-              type="button"
-              onClick={() => onShow(panel.from)}
-              className="rounded px-1 text-xs text-zinc-500 hover:text-zinc-900"
-            >
-              ← {panel.from === "summary" ? "表" : "一覧"}
-            </button>
-            <h2 className="text-xs font-semibold text-zinc-700">施設の詳細</h2>
-          </>
-        ) : (
-          <>
-            {/*
-              2つの見方を並べて持つ。災害別の表がこのアプリの答えで、
-              近い順はその裏取り。どちらかに片寄せると片方が行き止まりになる。
-            */}
-            <div className="flex shrink-0 gap-1">
-              <Tab
-                active={panel.state === "summary"}
-                onClick={() => onShow("summary")}
-              >
-                災害別
-              </Tab>
-              <Tab
-                active={panel.state === "list"}
-                onClick={() => onShow("list")}
-              >
-                近い順
-              </Tab>
+    /*
+      狭い画面では下から出すシート、広い画面では左の柱にする。
+      スマホは縦が足りないので下から出すのが自然だが、PC で同じことをすると
+      地図の高さを最大60%食う。PC は横が余っているので、そちらを使う。
+    */
+    <div className="pointer-events-auto absolute inset-x-0 bottom-0 flex max-h-[65%] flex-col rounded-t-xl border-t border-zinc-200 bg-white shadow-[0_-4px_16px_rgba(0,0,0,0.08)] md:inset-y-0 md:right-auto md:w-80 md:max-h-none md:rounded-none md:border-t-0 md:border-r md:shadow-[4px_0_16px_rgba(0,0,0,0.06)] lg:w-96">
+      {/*
+        住所の検索は**どの画面でも一番上**に置く。地図アプリの検索欄が上にあるのは
+        慣習でもあるし、場所を決め直すのに別の画面を経由させる必要がなくなる。
+        地図に重ねないのは、操作をパネルに集める整理に合わせたため。
+      */}
+      <div className="shrink-0 border-b border-zinc-100 px-3 py-2">
+        <div className="flex items-center gap-2">
+          {!collapsed && (
+            <div className="min-w-0 flex-1">
+              <AddressSearch onPick={onPickAddress} />
             </div>
-            <h2 className="min-w-0 truncate text-xs font-semibold text-zinc-700">
-              {originLabel(origin)}から
-            </h2>
-          </>
-        )}
-        {/*
-          保存はここに置く。調べ終わった直後が、いちばん「残しておこう」と
-          思える場所なので（PLAN の壁4「見て知っても何も残らない」への入口）。
-        */}
-        {panel.state !== "detail" && onSavePlace && (
+          )}
+          {collapsed && (
+            <span className="min-w-0 flex-1 truncate text-xs font-semibold text-zinc-700">
+              {origin ? originLabel(origin) : TITLES.start}
+            </span>
+          )}
+          {/* 畳めるのは狭い画面だけ。広い画面では柱が常に出ている。 */}
           <button
             type="button"
-            onClick={onSavePlace}
-            className="shrink-0 rounded-full border border-zinc-300 px-2.5 py-1 text-[11px] font-medium text-zinc-700 transition-colors hover:bg-zinc-50"
+            onClick={onToggleCollapsed}
+            aria-expanded={!collapsed}
+            aria-label={collapsed ? "パネルを開く" : "パネルを畳む"}
+            className="shrink-0 rounded px-2 py-1 text-zinc-400 hover:text-zinc-900 md:hidden"
           >
-            拠点に保存
+            {collapsed ? "▲" : "▼"}
           </button>
+        </div>
+        {!collapsed && locateError && (
+          <p className="mt-1 text-[11px] text-zinc-500">{locateError}</p>
         )}
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="閉じる"
-          className="ml-auto rounded px-2 text-zinc-400 hover:text-zinc-900"
-        >
-          ✕
-        </button>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-        {panel.state === "summary" && (
+      {/*
+        保存した拠点は常設の行にする。
+        以前は「場所を決める」という画面を経由しないと切り替えられなかったが、
+        住所は上の検索、現在地は地図右上のボタン、地図は押すだけ、と
+        他の決め方がすべて常設になったので、この一覧だけのために画面を1つ持つ理由が無い。
+      */}
+      {!collapsed && places.length > 0 && (
+        <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-zinc-100 px-3 py-2">
+          {places.map((place) => {
+            const current = origin?.name === place.name;
+            return (
+              <span key={place.name} className="flex items-center">
+                <button
+                  type="button"
+                  onClick={() => onSelectPlace(place)}
+                  className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+                    current
+                      ? "border-amber-300 bg-amber-50 text-zinc-900"
+                      : "border-zinc-300 text-zinc-700 hover:bg-zinc-50"
+                  }`}
+                >
+                  ★ {place.name}
+                </button>
+                <button
+                  type="button"
+                  aria-label={`${place.name}を削除`}
+                  onClick={() => onRemovePlace(place.name)}
+                  className="px-1 text-[11px] text-zinc-300 hover:text-zinc-700"
+                >
+                  ✕
+                </button>
+              </span>
+            );
+          })}
+        </div>
+      )}
+
+      {/*
+        消した直後は戻せるようにする。**✕ ですぐ消えて終わりにしない。**
+        拠点は自分で入力して作ったもので、消すと URL も書き換わるため、
+        取り違えて押したときに戻す手立てが無いと痛い。
+        確認ダイアログで毎回止めるより、押しやすいまま戻せるほうが軽い。
+      */}
+      {removedPlace && !collapsed && (
+        <div className="flex shrink-0 items-center gap-2 border-b border-zinc-100 bg-zinc-900 px-3 py-2 text-xs text-white">
+          <span className="min-w-0 flex-1 truncate">
+            「{removedPlace.name}」を削除しました
+          </span>
+          <button
+            type="button"
+            onClick={onUndoRemove}
+            className="shrink-0 rounded border border-white/30 px-2 py-1 text-[11px] font-medium hover:bg-white/10"
+          >
+            元に戻す
+          </button>
+        </div>
+      )}
+
+      {/*
+        起点の名前だけの行は持たない。拠点なら上の★が光っているし、
+        地図にはピンが立っていて、どこの話かはそれで足りる。
+        1行まるごと使うほどの情報ではなかった。
+      */}
+      {view.state === "detail" && origin && !collapsed && (
+        <div className="flex shrink-0 items-center gap-2 border-b border-zinc-100 px-3 py-1.5">
+          <button
+            type="button"
+            onClick={() => onShow(view.from)}
+            className="rounded px-1 text-xs text-zinc-500 hover:text-zinc-900"
+          >
+            ← {view.from === "summary" ? "表" : "一覧"}
+          </button>
+          <h2 className="text-xs font-semibold text-zinc-700">
+            {TITLES.detail}
+          </h2>
+        </div>
+      )}
+
+      {/* 絞り込みは1行に畳んで、ここに置く（地図の上から移した）。 */}
+      {!collapsed && <ShelterFilterBar value={filter} onChange={onChangeFilter} />}
+
+      {/*
+        見方の切り替え。災害別の表がこのアプリの答えで、近い順はその裏取り。
+        どちらかに片寄せると片方が行き止まりになる。
+      */}
+      {reading && !collapsed && (
+        <div className="flex shrink-0 items-center gap-1 border-b border-zinc-100 px-3 py-1.5">
+          <Tab
+            active={view.state === "summary"}
+            onClick={() => onShow("summary")}
+          >
+            災害別
+          </Tab>
+          <Tab active={view.state === "list"} onClick={() => onShow("list")}>
+            近い順
+          </Tab>
+        </div>
+      )}
+
+      {/* 畳んだときは見出しだけ残す。広い画面では畳まない。 */}
+      <div
+        className={`min-h-0 flex-1 overflow-y-auto overscroll-contain ${
+          collapsed ? "hidden md:block" : ""
+        }`}
+      >
+        {!origin && <EmptyState hasPlaces={places.length > 0} />}
+        {origin && view.state === "summary" && (
           <SummaryTable
             key={originKey(origin)}
             origin={origin}
-            onSelect={onSelect}
             onFocus={onFocus}
           />
         )}
-        {panel.state === "list" && (
+        {origin && view.state === "list" && (
           <NearbyList
             key={nearbyKey(origin, filter)}
             origin={origin}
             filter={filter}
-            onSelect={onSelect}
             onFocus={onFocus}
           />
         )}
-        {panel.state === "detail" && <DetailPane key={panel.id} id={panel.id} />}
+        {origin && view.state === "detail" && (
+          <DetailPane key={view.id} id={view.id} />
+        )}
       </div>
+
+      {/*
+        持ち帰る導線はパネルの最下段に固定する。
+        このアプリの答えは「調べた結果が手元に残ること」なので、スクロールや
+        画面の切り替えで見えなくなる場所には置かない。
+
+        **保存と共有は両方出す。** 1つの枠で入れ替えていたが、
+        「保存したい」と「送りたい」は同時に成り立つ場面のほうが多く、
+        入れ替わりに気づけない問題もあった。縦に積むと下段が厚くなるので1行を分け合う。
+        色と記号でも分ける（保存は黄＋★＝拠点の色、送るは黒＋QR＝主要動作の色）。
+
+        出さない条件は2つだけ。**保存**はいま見ている場所がすでに拠点のとき、
+        **送る**は拠点が1つも無いとき（送るものが無い）。
+      */}
+      {!collapsed && (showSave || showShare) && (
+        <div className="flex shrink-0">
+          {showSave && (
+            <button
+              type="button"
+              onClick={onSavePlace}
+              className="flex flex-1 flex-col items-center border-t border-amber-300 bg-amber-400 px-3 py-2.5 text-center transition-colors hover:bg-amber-300"
+            >
+              <span className="text-sm font-semibold text-zinc-900">
+                ★ 拠点として保存
+              </span>
+              {/* 保存の value は、まだ1つも持っていない人にだけ要る。 */}
+              {places.length === 0 && (
+                <span className="text-[11px] leading-snug text-zinc-800">
+                  次から1タップで開けて、家族に送ったり紙に出したりできます
+                </span>
+              )}
+            </button>
+          )}
+          {showShare && (
+            <button
+              type="button"
+              onClick={onShare}
+              className="flex flex-1 items-center justify-center gap-2 bg-zinc-900 px-3 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-zinc-800"
+            >
+              <QrIcon />
+              送る・紙に出す
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** QR コードの記号。細部は読めなくてよく、四隅の目印で「QR だ」と分かればいい。 */
+function QrIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor">
+      <path d="M1 1h5v5H1V1zm1.5 1.5v2h2v-2h-2z" />
+      <path d="M10 1h5v5h-5V1zm1.5 1.5v2h2v-2h-2z" />
+      <path d="M1 10h5v5H1v-5zm1.5 1.5v2h2v-2h-2z" />
+      <path d="M8.5 8.5H10V10H8.5V8.5zM11.5 8.5H13V10h-1.5V8.5zM13.5 10H15v1.5h-1.5V10zM8.5 11.5H10V13H8.5v-1.5zM11 11.5h1.5V13H11v-1.5zM13.5 13H15v1.5h-1.5V13zM8.5 14H10v1H8.5v-1zM11 14h1.5v1H11v-1z" />
+    </svg>
+  );
+}
+
+/** 起点がまだ無いときの中身。決め方は3つとも常設なので、ここでは道を示すだけ。 */
+function EmptyState({ hasPlaces }: { hasPlaces: boolean }) {
+  return (
+    <div className="px-3 py-3">
+      <p className="text-xs leading-relaxed text-zinc-600">
+        いまは<span className="font-medium text-zinc-900">例として東京の地図</span>
+        を出しています。調べたい場所を決めると、そこから
+        <strong className="font-medium text-zinc-900">
+          災害の種類ごとに使える避難場所
+        </strong>
+        を出します。
+      </p>
+      <ul className="mt-2 flex flex-col gap-1.5 text-[11px] leading-relaxed text-zinc-600">
+        {hasPlaces && <li>・上の★から、保存した拠点を開く</li>}
+        <li>・上の検索に住所を入れる（町丁目まで）</li>
+        <li>・地図の右上「現在地」を押す</li>
+        <li>・地図を押す（遠いときは押すたびに寄ります）</li>
+      </ul>
     </div>
   );
 }
@@ -186,15 +381,18 @@ function Tab({
  */
 function SummaryTable({
   origin,
-  onSelect,
   onFocus,
 }: {
   origin: Origin | null;
-  onSelect: (item: NearbyItem) => void;
   onFocus: (target: LatLng) => void;
 }) {
   const [summary, setSummary] = useState<PlaceSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /*
+    開いた行はその場で広げる。詳細を別の画面にすると、
+    「押す → 戻る → 次を押す」の往復になって、見比べるほど手間が増える。
+  */
+  const [openId, setOpenId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!origin) return;
@@ -231,7 +429,8 @@ function SummaryTable({
             <SummaryRowView
               label={disasterLabel(row.disaster)}
               item={row.nearest}
-              onSelect={onSelect}
+              open={row.nearest?.id === openId}
+              onToggle={setOpenId}
               onFocus={onFocus}
             />
           </li>
@@ -249,7 +448,8 @@ function SummaryTable({
         <SummaryRowView
           label="最寄り"
           item={summary.shelter}
-          onSelect={onSelect}
+          open={summary.shelter?.id === openId}
+          onToggle={setOpenId}
           onFocus={onFocus}
         />
       </div>
@@ -267,12 +467,14 @@ function SummaryTable({
 function SummaryRowView({
   label,
   item,
-  onSelect,
+  open,
+  onToggle,
   onFocus,
 }: {
   label: string;
   item: NearbyItem | null;
-  onSelect: (item: NearbyItem) => void;
+  open: boolean;
+  onToggle: (id: string | null) => void;
   onFocus: (target: LatLng) => void;
 }) {
   if (!item) {
@@ -287,49 +489,55 @@ function SummaryRowView({
   }
 
   return (
-    <button
-      type="button"
-      onClick={() => {
-        onFocus(item);
-        onSelect(item);
-      }}
-      className="flex w-full items-start gap-2.5 px-3 py-2.5 text-left hover:bg-zinc-50"
-    >
-      <span className="w-16 shrink-0 pt-0.5 text-xs font-semibold text-zinc-900">
-        {label}
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="flex items-center gap-1.5">
-          <span
-            className="size-2 shrink-0 rounded-full"
-            style={{ backgroundColor: kindOf(item.kind).color }}
-          />
-          <span className="truncate text-sm text-zinc-900">{item.name}</span>
+    <>
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => {
+          onFocus(item);
+          onToggle(open ? null : item.id);
+        }}
+        className={`flex w-full items-start gap-2.5 px-3 py-2.5 text-left hover:bg-zinc-50 ${
+          open ? "bg-zinc-50" : ""
+        }`}
+      >
+        <span className="w-16 shrink-0 pt-0.5 text-xs font-semibold text-zinc-900">
+          {label}
         </span>
-        <span className="mt-0.5 block truncate text-xs text-zinc-500">
-          {item.address}
+        <span className="min-w-0 flex-1">
+          <span className="flex items-center gap-1.5">
+            <span
+              className="size-2 shrink-0 rounded-full"
+              style={{ backgroundColor: kindOf(item.kind).color }}
+            />
+            <span className="truncate text-sm text-zinc-900">{item.name}</span>
+          </span>
+          <span className="mt-0.5 block truncate text-xs text-zinc-500">
+            {item.address}
+          </span>
         </span>
-      </span>
-      <span className="w-12 shrink-0 pt-0.5 text-right text-xs font-semibold text-zinc-900 tabular-nums">
-        {formatDistance(item.distanceM)}
-      </span>
-    </button>
+        <span className="w-12 shrink-0 pt-0.5 text-right text-xs font-semibold text-zinc-900 tabular-nums">
+          {formatDistance(item.distanceM)}
+        </span>
+      </button>
+      {open && <InlineDetail id={item.id} />}
+    </>
   );
 }
 
 function NearbyList({
   origin,
   filter,
-  onSelect,
   onFocus,
 }: {
   origin: Origin | null;
   filter: ShelterFilter;
-  onSelect: (item: NearbyItem) => void;
   onFocus: (target: LatLng) => void;
 }) {
   const [result, setResult] = useState<NearbyResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // 表と同じく、開いた行はその場で広げる。
+  const [openId, setOpenId] = useState<string | null>(null);
 
   // 絞り込みを変えたら取り直す。「この災害で使える最寄り」が変わるのが要点なので、
   // 一覧を開いたまま災害種別を切り替えられるようにしてある。
@@ -385,11 +593,14 @@ function NearbyList({
           <li key={item.id}>
             <button
               type="button"
+              aria-expanded={item.id === openId}
               onClick={() => {
                 onFocus(item);
-                onSelect(item);
+                setOpenId(item.id === openId ? null : item.id);
               }}
-              className="flex w-full items-start gap-2.5 px-3 py-2.5 text-left hover:bg-zinc-50"
+              className={`flex w-full items-start gap-2.5 px-3 py-2.5 text-left hover:bg-zinc-50 ${
+                item.id === openId ? "bg-zinc-50" : ""
+              }`}
             >
               <span className="w-12 shrink-0 pt-0.5 text-right text-xs font-semibold text-zinc-900 tabular-nums">
                 {formatDistance(item.distanceM)}
@@ -411,6 +622,7 @@ function NearbyList({
                 </span>
               </span>
             </button>
+            {item.id === openId && <InlineDetail id={item.id} />}
           </li>
         ))}
       </ul>
@@ -420,6 +632,15 @@ function NearbyList({
         距離は直線距離で、実際の道のりではありません。
       </p>
     </>
+  );
+}
+
+/** 一覧・表の行の中に出す詳細。画面を切り替えずに、そのまま次の行へ移れる。 */
+function InlineDetail({ id }: { id: string }) {
+  return (
+    <div className="border-y border-zinc-100 bg-zinc-50/70 px-3 py-2.5">
+      <DetailPane id={id} />
+    </div>
   );
 }
 
