@@ -13,6 +13,7 @@ import type { ShelterFilter } from "@/lib/filter";
 import type { LatLng } from "@/lib/geo";
 import { type Origin, originLabel } from "@/lib/origin";
 import { MAX_PLACES, type Place } from "@/lib/places";
+import type { SameAddressPlace } from "@/lib/shelter";
 
 /**
  * 操作と結果をまとめて置くパネル。狭い画面では下のシート、広い画面では左の柱。
@@ -45,6 +46,7 @@ export default function ShelterPanel({
   collapsed,
   onToggleCollapsed,
   onShow,
+  onOpenDetail,
   onChangeFilter,
   onPickAddress,
   onLocate,
@@ -70,6 +72,8 @@ export default function ShelterPanel({
   collapsed: boolean;
   onToggleCollapsed: () => void;
   onShow: (state: "summary" | "list") => void;
+  /** 別の施設の詳細へ移る（詳細の中の「同じ住所にある指定」から） */
+  onOpenDetail: (id: string, at: LatLng, from: "summary" | "list") => void;
   onChangeFilter: (next: ShelterFilter) => void;
   onPickAddress: (hit: GeocodeHit) => void;
   /** 現在地を取る。起点がまだ無いときの案内から直接押せるようにするため */
@@ -107,6 +111,18 @@ export default function ShelterPanel({
   const showSave = reading && Boolean(onSavePlace);
   /** 送れるものがあるか */
   const showShare = places.length > 0;
+
+  /*
+    同じ住所にある別の指定へ移る。**戻り先は、いま見ていた面をそのまま残す。**
+    災害別の表の行の中から押されたのに一覧へ返すと、← の行き先が変わってしまう。
+    すでに詳細を見ているときは、その詳細が持っている戻り先を引き継ぐ。
+  */
+  const openSameAddress = (place: SameAddressPlace) =>
+    onOpenDetail(
+      place.id,
+      place,
+      view.state === "detail" ? view.from : view.state,
+    );
 
   return (
     /*
@@ -321,12 +337,24 @@ export default function ShelterPanel({
           />
         )}
         {origin && view.state === "summary" && (
-          <SummaryTable origin={origin} filter={filter} onFocus={onFocus} />
+          <SummaryTable
+            origin={origin}
+            filter={filter}
+            onFocus={onFocus}
+            onOpenSameAddress={openSameAddress}
+          />
         )}
         {origin && view.state === "list" && (
-          <NearbyList origin={origin} filter={filter} onFocus={onFocus} />
+          <NearbyList
+            origin={origin}
+            filter={filter}
+            onFocus={onFocus}
+            onOpenSameAddress={openSameAddress}
+          />
         )}
-        {view.state === "detail" && <DetailPane id={view.id} />}
+        {view.state === "detail" && (
+          <DetailPane id={view.id} onOpenSameAddress={openSameAddress} />
+        )}
       </div>
 
       {/* 保存ボタンが出ない理由のうち、上限のほうは言わないと分からない。 */}

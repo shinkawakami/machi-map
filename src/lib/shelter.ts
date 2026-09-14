@@ -82,7 +82,41 @@ export type ShelterDetail = {
 export type PlaceDetail = ShelterDetail & {
   /** 同じ名前・同じ住所にある、ほかの指定。無ければ空 */
   others: ShelterDetail[];
+  /**
+   * 住所だけが同じで、名前が違う、もう一方の種別の指定。
+   *
+   * **名前まで持つ。** 「同じ住所にもう一方の指定もあります」とだけ言われても、
+   * 同じ施設のことなのか隣の建物なのかは読む人に判断できない。実データでは
+   * 「〇〇小学校」と「〇〇小学校 グラウンド」のように**建物のどこが指定されて
+   * いるかが違うだけ**のものが大半で、名前さえ出れば一目で決められる。
+   *
+   * 引けなかったときは空（`sameAddressAsOther` は国土地理院の CSV の列で、
+   * 住所の表記ゆれで突き合わせに失敗することがある。実測で 26,890 件中 239 件）。
+   */
+  sameAddress: SameAddressPlace[];
 };
+
+/**
+ * 住所だけが同じ指定。押すとその施設の詳細へ移れる。
+ *
+ * 座標を持つのは**地図の選択の輪をその点に出すため**。住所が同じでも行は別なので、
+ * 校舎とグラウンドのように座標がわずかに違うことがある。
+ */
+export type SameAddressPlace = {
+  id: string;
+  name: string;
+  lat: number;
+  lng: number;
+};
+
+/**
+ * 住所だけが同じ指定を、いくつまで名前で出すか。
+ *
+ * 実測の分布は 1件 23,087 / 2件 2,499 / 3件 613 で、**96% が2件以下**。
+ * 「秩父宮記念市民会館・秩父公園・秩父市役所」のように同じ住所に別施設が
+ * 並ぶ例もあるので、そこは打ち切って「ほか」に寄せる。
+ */
+export const SAME_ADDRESS_LIMIT = 3;
 
 export type NearbyItem = ShelterDetail & {
   distanceM: number;

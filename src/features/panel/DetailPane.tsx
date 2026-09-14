@@ -4,7 +4,7 @@ import { api } from "@/client/api";
 import { useResource } from "@/client/use-resource";
 import ShelterDetailView from "@/features/panel/ShelterDetailView";
 import { Message } from "@/features/panel/parts";
-import type { PlaceDetail } from "@/lib/shelter";
+import type { PlaceDetail, SameAddressPlace } from "@/lib/shelter";
 
 /**
  * 1つの指定の中身。
@@ -12,10 +12,16 @@ import type { PlaceDetail } from "@/lib/shelter";
  * 地図の点は転送量のために名前と種別しか持っていないので、押されてから取る
  * （src/lib/shelter.ts の ShelterPoint）。
  */
-export default function DetailPane({ id }: { id: string }) {
+export default function DetailPane({
+  id,
+  onOpenSameAddress,
+}: {
+  id: string;
+  onOpenSameAddress: (place: SameAddressPlace) => void;
+}) {
   return (
     <div className="px-4 py-3">
-      <Body id={id} />
+      <Body id={id} onOpenSameAddress={onOpenSameAddress} />
     </div>
   );
 }
@@ -38,16 +44,24 @@ export function InlineDetail({
   id,
   nameShown = false,
   addressShown = false,
+  onOpenSameAddress,
 }: {
   id: string;
   /** 上の行が施設名を見出しに出しているか */
   nameShown?: boolean;
   /** 上の行が住所を出しているか */
   addressShown?: boolean;
+  onOpenSameAddress: (place: SameAddressPlace) => void;
 }) {
   return (
     <div className="border-y border-zinc-100 bg-zinc-50/70 px-4 py-3">
-      <Body id={id} inline omitName={nameShown} omitAddress={addressShown} />
+      <Body
+        id={id}
+        inline
+        omitName={nameShown}
+        omitAddress={addressShown}
+        onOpenSameAddress={onOpenSameAddress}
+      />
     </div>
   );
 }
@@ -57,11 +71,13 @@ function Body({
   inline = false,
   omitName = false,
   omitAddress = false,
+  onOpenSameAddress,
 }: {
   id: string;
   inline?: boolean;
   omitName?: boolean;
   omitAddress?: boolean;
+  onOpenSameAddress: (place: SameAddressPlace) => void;
 }) {
   const { data, error } = useResource<PlaceDetail>(api.detail(id));
 
@@ -74,6 +90,7 @@ function Body({
       inline={inline}
       omitName={omitName}
       omitAddress={omitAddress}
+      onOpenSameAddress={onOpenSameAddress}
     />
   );
 }

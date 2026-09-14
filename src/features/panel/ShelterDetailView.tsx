@@ -3,7 +3,12 @@
 import type { ShelterKind } from "@/generated/prisma/enums";
 import { type DisasterKey, DISASTER_TYPES } from "@/lib/disasters";
 import { kindOf, KINDS } from "@/lib/kinds";
-import type { PlaceDetail, ShelterDetail } from "@/lib/shelter";
+import {
+  type PlaceDetail,
+  SAME_ADDRESS_LIMIT,
+  type SameAddressPlace,
+  type ShelterDetail,
+} from "@/lib/shelter";
 
 /**
  * 1つの場所の中身。
@@ -50,8 +55,11 @@ export default function ShelterDetailView({
   inline = false,
   omitName = false,
   omitAddress = false,
+  onOpenSameAddress,
 }: {
   detail: PlaceDetail;
+  /** 同じ住所にある別の指定を押したとき。その施設の詳細へ移る */
+  onOpenSameAddress: (place: SameAddressPlace) => void;
   /**
    * 一覧・表の行の中に出しているか。周りに文脈があるので、全件で同じ文章
    * （役割の説明・災害種別の指定がありません）は出さない。
@@ -65,6 +73,14 @@ export default function ShelterDetailView({
   const blocks = toBlocks([detail, ...detail.others]);
   const full = blocks.filter((block) => !isCompact(block, blocks.length));
   const otherKind = KINDS.find((k) => k.key !== detail.kind)!;
+  /*
+    **古い JSON が返ってくる前提で読む。** 詳細は CDN で1日（stale 7日）、
+    ブラウザでも5分キャッシュされる（src/server/http-cache.ts）。sameAddress は
+    あとから足した項目なので、**新しい画面に古い応答が返る窓がある**。
+    素直に .length を読むと、そこで詳細の描画ごと落ちる。
+    無ければ空として扱えば、名前が出ないだけで下の従来の言い方に落ちる。
+  */
+  const sameAddress = detail.sameAddress ?? [];
 
   return (
     <div className="flex flex-col gap-3 text-sm">
@@ -145,13 +161,56 @@ export default function ShelterDetailView({
 
       {/*
         名前まで一致する指定は上で中身ごと出しているので、そのときは言わない。
-        ここで残るのは「住所は同じだが名前が違う」もので、同じ施設とは限らない。
+        ここで残るのは「住所は同じだが名前が違う」もの。開いた施設の 13.5% で出る。
+
+        **相手の名前を出す。** 以前は「同じ住所にもう一方の指定もあります
+        （…同じ施設とは限りません）」とだけ書いていて、**括弧の打ち消しが本文より
+        長く、読み終えても何も決められなかった**。実データでは「〇〇小学校」と
+        「〇〇小学校 グラウンド」のように建物のどこが指定されているかが違うだけの
+        ものが大半で、**名前さえ出れば同じ施設かどうかは人が一目で決められる**。
+        断りは残すが、判断の材料を先に置いて、打ち消しは添え物に降ろす。
       */}
       {detail.others.length === 0 && detail.sameAddressAsOther && (
         <p className="rounded bg-zinc-50 px-3 py-2 text-sm leading-relaxed text-zinc-600">
-          同じ住所に{otherKind.label}
-          の指定もあります（国土地理院のデータ上の住所が一致するという意味で、
-          同じ施設とは限りません）。
+          {sameAddress.length > 0 ? (
+            <>
+              同じ住所に
+              {/*
+                **名前は押せる。** 校舎とグラウンドのように同じ施設の別の場所で
+                あることが多く、そのときは相手の ○/× こそ知りたいものになる。
+                座標も持っているので、移った先では地図の選択の輪もそちらに動く。
+                打ち切った「ほか」は手元に行がないので、押せる形にはしない。
+              */}
+              {sameAddress
+                .slice(0, SAME_ADDRESS_LIMIT)
+                .map((place, index) => (
+                  <span key={place.id}>
+                    {index > 0 && "・"}
+                    <button
+                      type="button"
+                      onClick={() => onOpenSameAddress(place)}
+                      className="font-semibold text-zinc-900 underline underline-offset-2 hover:text-zinc-600"
+                    >
+                      {place.name}
+                    </button>
+                  </span>
+                ))}
+              {sameAddress.length > SAME_ADDRESS_LIMIT && (
+                <span className="font-semibold text-zinc-900"> ほか</span>
+              )}
+              （{otherKind.label}）があります。
+              名前が違うので、同じ建物の別の場所のことも、別の施設のこともあります。
+            </>
+          ) : (
+            /*
+              旗は立っているのに相手を引けなかったとき（住所の表記ゆれ。
+              実測で 26,890 件中 239 件）。名前が無いので、従来どおりの言い方に落とす。
+            */
+            <>
+              同じ住所に{otherKind.label}の指定もあります
+              （国土地理院のデータ上、住所が一致するという意味です）。
+            </>
+          )}
         </p>
       )}
 

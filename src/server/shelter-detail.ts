@@ -1,6 +1,6 @@
 import type { ShelterKind } from "@/generated/prisma/enums";
 import { DISASTER_TYPES, type DisasterKey } from "@/lib/disasters";
-import type { PlaceDetail, ShelterDetail } from "@/lib/shelter";
+import { type PlaceDetail, SAME_ADDRESS_LIMIT, type ShelterDetail } from "@/lib/shelter";
 import { prisma } from "@/server/db";
 
 /**
@@ -105,5 +105,45 @@ export async function fetchDetail(
     select: DETAIL_SELECT,
   });
 
-  return { ...toDetail(row), others: others.map(toDetail) };
+  /*
+    住所だけが同じ（名前は違う）、もう一方の種別の指定。**名前まで引く。**
+
+    上の others は名前も一致するものだけを束ねるので、「〇〇小学校」と
+    「〇〇小学校 グラウンド」は別々のまま残る。実データではこれが大半で、
+    **校庭に逃げこんで体育館で寝泊まりする**という、利用者がいちばん知りたい
+    関係がここに落ちている。旗（sameAddressAsOther）だけでは名前が分からず、
+    同じ施設なのか隣の建物なのかを読む人が決められなかった。
+
+    **引くのは断り書きを出すときだけ。** 表示条件（others が空で、かつ旗が立って
+    いる）と同じ条件でしか走らせない。全体の 13.5% で、それ以外では1クエリ増えない。
+
+    索引の使い方は上の others と同じで、municipalityCode で絞ってから住所で
+    突き合わせる（name / address に索引は無い）。
+  */
+  const sameAddress =
+    row.sameAddressAsOther && others.length === 0
+      ? await prisma.shelter.findMany({
+          where: {
+            municipalityCode: row.municipalityCode,
+            address: row.address,
+            kind: { not: row.kind },
+            name: { not: row.name },
+          },
+          select: { sourceId: true, name: true, lat: true, lng: true },
+          orderBy: { name: "asc" },
+          // 打ち切ったかどうかを呼ぶ側が判断できるよう、1件だけ多く取る。
+          take: SAME_ADDRESS_LIMIT + 1,
+        })
+      : [];
+
+  return {
+    ...toDetail(row),
+    others: others.map(toDetail),
+    sameAddress: sameAddress.map((s) => ({
+      id: s.sourceId,
+      name: s.name,
+      lat: s.lat,
+      lng: s.lng,
+    })),
+  };
 }

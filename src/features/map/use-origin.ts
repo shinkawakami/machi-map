@@ -47,8 +47,14 @@ export type OriginState = {
   pick: (next: Origin, options?: PickOptions) => void;
   /** 見る面を切り替える（起点は動かさない） */
   show: (state: "summary" | "list") => void;
-  /** 地図の点を押した。詳細を開いて、その点に選択の輪を出す */
-  openDetail: (id: string, at: LatLng) => void;
+  /**
+   * 詳細を開いて、その点に選択の輪を出す。地図の点を押したときと、
+   * 詳細の中の「同じ住所にある指定」を押したときに呼ぶ。
+   *
+   * `from` は詳細から戻る先。地図から開いたときは一覧に返すのが自然だが、
+   * **災害別の表から開いた行の中で押されたときは、表に返さないと行き先が変わる。**
+   */
+  openDetail: (id: string, at: LatLng, from?: "summary" | "list") => void;
   /** 選択の輪だけ動かす（一覧で行を選んだとき・null で消す） */
   select: (target: LatLng | null) => void;
   /** 押し間違いで移った起点を、見ていた面ごと戻す。戻り先を返す（カメラ用） */
@@ -140,10 +146,13 @@ export function useOrigin(places: Place[]): OriginState {
     setView({ state });
   }, []);
 
-  const openDetail = useCallback((id: string, at: LatLng) => {
-    setSelected(at);
-    setView({ state: "detail", id, from: "list" });
-  }, []);
+  const openDetail = useCallback(
+    (id: string, at: LatLng, from: "summary" | "list" = "list") => {
+      setSelected(at);
+      setView({ state: "detail", id, from });
+    },
+    [],
+  );
 
   const undo = useCallback(() => {
     if (!undoOffer) return null;

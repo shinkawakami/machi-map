@@ -12,7 +12,7 @@ import { formatDistance } from "@/lib/format";
 import type { LatLng } from "@/lib/geo";
 import { kindOf } from "@/lib/kinds";
 import type { Origin } from "@/lib/origin";
-import type { NearbyResult } from "@/lib/shelter";
+import type { NearbyResult, SameAddressPlace } from "@/lib/shelter";
 
 /**
  * 近い順の一覧。災害別の表（SummaryTable）の裏取りにあたる面。
@@ -25,10 +25,12 @@ export default function NearbyList({
   origin,
   filter,
   onFocus,
+  onOpenSameAddress,
 }: {
   origin: Origin;
   filter: ShelterFilter;
   onFocus: (target: LatLng) => void;
+  onOpenSameAddress: (place: SameAddressPlace) => void;
 }) {
   const { data: result, error } = useResource<NearbyResult>(
     api.nearby(origin, filter),
@@ -111,7 +113,13 @@ export default function NearbyList({
                   : disasterSummary(item.disasters)}
               </span>
             </button>
-            {item.id === openId && <InlineDetail id={item.id} nameShown />}
+            {item.id === openId && (
+              <InlineDetail
+                id={item.id}
+                nameShown
+                onOpenSameAddress={onOpenSameAddress}
+              />
+            )}
           </li>
         ))}
       </ul>

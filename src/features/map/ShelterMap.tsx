@@ -494,6 +494,7 @@ export default function ShelterMap() {
         collapsed={collapsed}
         onToggleCollapsed={() => setCollapsed((on) => !on)}
         onShow={originState.show}
+        onOpenDetail={originState.openDetail}
         onChangeFilter={setFilter}
         onPickAddress={pickAddress}
         onLocate={geo.locate}

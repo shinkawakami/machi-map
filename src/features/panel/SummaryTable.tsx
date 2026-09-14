@@ -11,7 +11,7 @@ import { formatDistance } from "@/lib/format";
 import type { LatLng } from "@/lib/geo";
 import { kindOf } from "@/lib/kinds";
 import type { Origin } from "@/lib/origin";
-import type { PlaceSummary } from "@/lib/shelter";
+import type { PlaceSummary, SameAddressPlace } from "@/lib/shelter";
 import {
   groupSummaryRows,
   groupTitle,
@@ -32,11 +32,13 @@ export default function SummaryTable({
   origin,
   filter,
   onFocus,
+  onOpenSameAddress,
 }: {
   origin: Origin;
   /** 表には効かないが、効いていないことを言う必要があるかの判断に使う */
   filter: ShelterFilter;
   onFocus: (target: LatLng) => void;
+  onOpenSameAddress: (place: SameAddressPlace) => void;
 }) {
   const { data: summary, error } = useResource<PlaceSummary>(
     api.summary(origin),
@@ -99,6 +101,7 @@ export default function SummaryTable({
               open={Boolean(group.item) && group.item?.id === openId}
               onToggle={setOpenId}
               onFocus={onFocus}
+              onOpenSameAddress={onOpenSameAddress}
             />
           </li>
         ))}
@@ -123,6 +126,7 @@ export default function SummaryTable({
           open={Boolean(summary.shelter) && summary.shelter?.id === openId}
           onToggle={setOpenId}
           onFocus={onFocus}
+          onOpenSameAddress={onOpenSameAddress}
         />
       </div>
 
@@ -150,6 +154,7 @@ function SummaryGroupView({
   open,
   onToggle,
   onFocus,
+  onOpenSameAddress,
 }: {
   /** 行の見出し。指定避難所の行のように、上の見出しで足りるときは null */
   title: string | null;
@@ -157,6 +162,7 @@ function SummaryGroupView({
   open: boolean;
   onToggle: (id: string | null) => void;
   onFocus: (target: LatLng) => void;
+  onOpenSameAddress: (place: SameAddressPlace) => void;
 }) {
   const { item, far } = group;
   const heading = title && (
@@ -224,7 +230,14 @@ function SummaryGroupView({
             : item.address}
         </span>
       </button>
-      {open && <InlineDetail id={item.id} nameShown={!far} addressShown={!far} />}
+      {open && (
+        <InlineDetail
+          id={item.id}
+          nameShown={!far}
+          addressShown={!far}
+          onOpenSameAddress={onOpenSameAddress}
+        />
+      )}
     </>
   );
 }
