@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 
 import AddressSearch from "@/features/panel/AddressSearch";
 import DetailPane from "@/features/panel/DetailPane";
@@ -92,6 +92,16 @@ export default function ShelterPanel({
 }) {
   /** 起点がまだ無いときの案内から、住所の欄に焦点を渡すための参照 */
   const searchRef = useRef<HTMLInputElement>(null);
+  /**
+   * いま見ている拠点のチップ。**横に流す列なので、画面の外に出たら連れ戻す。**
+   * 光っているチップが見えていないと、どこの話をしている画面なのか分からなくなる。
+   */
+  const currentChipRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    // block を nearest にしておくこと。縦は別の入れ物が持っていて、ここで動かす話ではない。
+    currentChipRef.current?.scrollIntoView({ inline: "nearest", block: "nearest" });
+  }, [origin?.name]);
   const reading = origin !== null && view.state !== "detail";
   /** いま見ている場所を拠点にできるか（すでに拠点なら出さない） */
   const showSave = reading && Boolean(onSavePlace);
@@ -160,17 +170,28 @@ export default function ShelterPanel({
         住所は上の検索、現在地は地図右上のボタン、地図は押すだけ、と
         他の決め方がすべて常設になったので、この一覧だけのために画面を1つ持つ理由が無い。
 
+        **折り返さず、横に流す。** チップは2文字の名前で 76px、いま見ている拠点には
+        ✕ が付いて 116px。プリセットは4つ（自宅・職場・実家・学校）あるので、
+        **4件目からどの画面幅でも2行**になり、行が 57px から 102px に膨らんでいた。
+        パネルの縦は取り合いになっていて（絞り込みとタブを1行にまとめたのと同じ話）、
+        拠点を足しただけで中身が 45px 削れる作りは持ちたくない。
+
+        横に流せば**件数に関わらず 57px で固定**できる。上限は5件で名前も短いので、
+        外に出るのはせいぜい1つ。Material の scrollable chip set と同じ扱いで、
+        端で切れているチップ自体が「まだ続く」の合図になる。
+        スクロールバーは消す（出すと行がそのぶん厚くなって、元も子もない）。
       */}
       {!collapsed && places.length > 0 && (
-        <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-zinc-100 px-4 py-2">
+        <div className="no-scrollbar flex shrink-0 items-center gap-1.5 overflow-x-auto overscroll-x-contain border-b border-zinc-100 px-4 py-2">
           {places.map((place) => {
             const current = origin?.name === place.name;
             return (
-              <span key={place.name} className="flex items-center">
+              <span key={place.name} className="flex shrink-0 items-center">
                 <button
                   type="button"
+                  ref={current ? currentChipRef : undefined}
                   onClick={() => onSelectPlace(place)}
-                  className={`min-h-10 rounded-full border px-3.5 text-sm font-medium transition-colors ${
+                  className={`min-h-10 shrink-0 rounded-full border px-3.5 text-sm font-medium whitespace-nowrap transition-colors ${
                     current
                       ? "border-amber-300 bg-amber-50 text-zinc-900"
                       : "border-zinc-300 text-zinc-700 hover:bg-zinc-50"
@@ -251,25 +272,34 @@ export default function ShelterPanel({
         </div>
       )}
 
-      {/* 絞り込みは1行に畳んで、ここに置く（地図の上から移した）。 */}
-      {!collapsed && <ShelterFilterBar value={filter} onChange={onChangeFilter} />}
-
       {/*
-        見方の切り替え。災害別の表がこのアプリの答えで、近い順はその裏取り。
-        どちらかに片寄せると片方が行き止まりになる。
+        **見方の切り替えと絞り込みは、1行を分け合う。**
+        もとは別々の行で、合わせて 156px（下のシートの 42%）を固定で使っていた。
+        住所の欄・拠点の★・下段の保存/送るを足すと、iPhone SE 相当では
+        **中身に残るのが 40px 弱**しかなく、答えを読む場所が操作に食われていた。
+        左にセグメント・右に絞り込み、はこの種の画面で広く使われている並び。
+
+        見方の切り替えは、災害別の表がこのアプリの答えで、近い順はその裏取り。
+        どちらかに片寄せると片方が行き止まりになるので、両方を出し続ける。
+        起点がまだ無いあいだは出す中身が無いので、絞り込みだけが残る
+        （絞り込みは起点と関係なく地図に効くので、こちらは常に置く）。
       */}
-      {reading && !collapsed && (
-        <div className="flex shrink-0 items-center gap-1 border-b border-zinc-100 px-4 py-1.5">
-          <Tab
-            active={view.state === "summary"}
-            onClick={() => onShow("summary")}
-          >
-            災害別
-          </Tab>
-          <Tab active={view.state === "list"} onClick={() => onShow("list")}>
-            近い順
-          </Tab>
-        </div>
+      {!collapsed && (
+        <ShelterFilterBar value={filter} onChange={onChangeFilter}>
+          {reading && (
+            <>
+              <Tab
+                active={view.state === "summary"}
+                onClick={() => onShow("summary")}
+              >
+                災害別
+              </Tab>
+              <Tab active={view.state === "list"} onClick={() => onShow("list")}>
+                近い順
+              </Tab>
+            </>
+          )}
+        </ShelterFilterBar>
       )}
 
       {/* 畳んだときは見出しだけ残す。広い画面では畳まない。 */}

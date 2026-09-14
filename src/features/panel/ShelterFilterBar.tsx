@@ -7,17 +7,29 @@ import {
   canonicalDisasters,
   DISASTER_TYPES,
   type DisasterKey,
-  disasterLabel,
 } from "@/lib/disasters";
 import { KINDS } from "@/lib/kinds";
 import type { ShelterFilter } from "@/lib/filter";
 
 /**
- * 絞り込み。**1行に畳んでパネルの中に置く。**
+ * 絞り込み。**1つのドロップダウンに畳んで、見方の切り替え（タブ）と同じ行に置く。**
  *
- * 以前は地図の上に常設していて、種別・災害8種・注記で縦を 90px ほど使っていた。
- * ところが拠点ごとの「8種 × 最寄り」の表が8種を一度に出すようになり、
- * 地図を絞る場面自体が減った。常時その幅を取る理由がない。
+ * もとは種別2つ・福祉避難所・災害種別の4つを行に並べていた。狭い画面では必ず
+ * 2行に折り返し、**その行だけで 103px**（下のシートの 28%）を使っていた。
+ * 下にタブの行が別にあり、合わせて 156px。シートは iPhone SE 相当で 370px しか
+ * 無いので、住所の欄・拠点の★・下段の保存/送るを足すと、**中身に残るのは 40px 弱**
+ * だった。地図の下に出る答えを読む場所が、操作に食われて無くなっていた。
+ *
+ * 畳める理由は2つある。
+ *
+ * 1. **既定の画面（災害別の表）に、絞り込みは効かない。** 8種すべてが並ぶこと
+ *    自体が答えなので（SummaryTable）、そこでは常時開いている必要が無い
+ * 2. **絞り込んだ結果は地図に出る。** いま何で絞っているかは地図のチップが
+ *    出し続けるので（src/lib/filter.ts の filterBadges）、閉じても状態は読める
+ *
+ * 左にセグメント・右に絞り込み、はこの種の画面で広く使われている並び。
+ * タブは呼ぶ側（ShelterPanel）が持ったまま children で受け取る。絞り込みと
+ * 見方の切り替えは別の仕事で、ここが両方を知る理由は無い。
  *
  * 災害種別は**複数選択**（2026-09-13 に単一選択から変えた）。
  *
@@ -33,9 +45,12 @@ import type { ShelterFilter } from "@/lib/filter";
 export default function ShelterFilterBar({
   value,
   onChange,
+  children,
 }: {
   value: ShelterFilter;
   onChange: (next: ShelterFilter) => void;
+  /** 同じ行の左に置くもの（見方の切り替えタブ）。起点がまだ無いときは空 */
+  children?: React.ReactNode;
 }) {
   const toggleKind = (kind: ShelterKind) => {
     const next = value.kinds.includes(kind)
@@ -88,15 +103,16 @@ export default function ShelterFilterBar({
   };
 
   /*
-    畳んだときの見出し。**全部は並べない。** 8種選べるので、そのまま並べると
-    1行のバーが折り返して、畳んである意味が消える。先頭と残りの数で出す。
+    畳んだときの見出し。**中身は並べず、効いている条件の数だけを出す。**
+    3つの軸（種別・福祉避難所・災害8種）が1つのドロップダウンに入ったので、
+    名前を並べると畳んである意味が消える。何で絞っているかの全文は地図の
+    チップが出すので（filterBadges）、ここは「絞っている・いない」と
+    その重さが読めれば足りる。
   */
-  const summaryLabel =
-    chosen.length === 0
-      ? "災害で絞る"
-      : chosen.length === 1
-        ? disasterLabel(chosen[0])
-        : `${disasterLabel(chosen[0])} +${chosen.length - 1}`;
+  const activeCount =
+    chosen.length +
+    (value.welfareOnly ? 1 : 0) +
+    (!value.welfareOnly && value.kinds.length === 1 ? 1 : 0);
 
   /*
     最後の1つを押した人に返す一言。理由は title に書いてあったが、
@@ -139,74 +155,84 @@ export default function ShelterFilterBar({
 
   return (
     <div className="shrink-0 border-b border-zinc-100">
-      <div className="flex flex-wrap items-center gap-1.5 px-4 py-2">
-        {KINDS.map((kind) => {
-          const on = value.kinds.includes(kind.key);
-          const last = on && value.kinds.length === 1;
-          return (
-            <button
-              key={kind.key}
-              type="button"
-              aria-pressed={on}
-              aria-disabled={last}
-              title={last ? "どちらかは表示します" : kind.description}
-              onClick={() => toggleKind(kind.key)}
-              // 押して切り替わるものは指で押せる大きさに（パネル内のチップは一律 40px）。
-              className={`flex min-h-10 items-center gap-1 rounded-full border px-3 text-xs transition-colors ${
-                on
-                  ? "border-zinc-300 bg-zinc-100 font-medium text-zinc-900"
-                  : "border-zinc-200 bg-white text-zinc-500"
-              }`}
-            >
-              <span
-                className="size-2 shrink-0 rounded-full ring-1 ring-inset ring-black/10"
-                style={{ backgroundColor: on ? kind.color : "#d4d4d8" }}
-              />
-              {kind.shortLabel}
-            </button>
-          );
-        })}
+      <div className="flex items-center gap-1 px-4 py-1.5">
+        {children}
 
-        {/*
-          福祉避難所は種別の並びに置く。災害種別（緊急避難場所の属性）とは
-          別の軸で、指定避難所の中の絞り込みにあたるため。
-        */}
-        <button
-          type="button"
-          aria-pressed={value.welfareOnly}
-          title="受入対象者の定めがある指定避難所"
-          onClick={toggleWelfare}
-          className={`flex min-h-10 items-center rounded-full border px-3 text-xs transition-colors ${
-            value.welfareOnly
-              ? "border-zinc-300 bg-zinc-100 font-medium text-zinc-900"
-              : "border-zinc-200 bg-white text-zinc-500"
-          }`}
-        >
-          福祉避難所
-        </button>
-
-        {/*
-          災害種別は畳んでおく。開くのは絞りたいときだけで、
-          普段は「いま何で絞っているか」が読めれば足りる。
-        */}
         <details
           ref={detailsRef}
           open={open}
           onToggle={(event) => setOpen(event.currentTarget.open)}
-          className="group relative ml-auto"
+          className="relative ml-auto"
         >
           <summary
-            className={`flex min-h-10 cursor-pointer list-none items-center rounded-full border px-3 text-xs marker:content-none ${
-              chosen.length > 0
+            className={`flex min-h-9 cursor-pointer list-none items-center rounded-full border px-3 text-[13px] marker:content-none ${
+              activeCount > 0
                 ? "border-zinc-900 bg-zinc-900 font-medium text-white"
-                : "border-zinc-200 text-zinc-500"
+                : "border-zinc-200 text-zinc-600"
             }`}
           >
-            {summaryLabel} ▾
+            絞り込み{activeCount > 0 && ` ${activeCount}`} ▾
           </summary>
 
-          <div className="absolute right-0 z-20 mt-1 w-72 rounded-lg border border-zinc-200 bg-white p-2 shadow-lg">
-            <div className="flex flex-wrap gap-1">
+          {/*
+            **下のシートでは上に開く。** 中身は 250px ほどあり、シートは画面の
+            下端に貼り付いている。下に開くと画面の外へ出て、body が
+            overflow-hidden なので追いかける手段が無い。広い画面では左の柱の
+            上のほうに居るので、そちらは下に開く。
+            どちらでも足りないときのために丈を切って、中でスクロールさせる。
+          */}
+          <div className="absolute right-0 bottom-full z-20 mb-1 max-h-[60vh] w-[19rem] overflow-y-auto overscroll-contain rounded-lg border border-zinc-200 bg-white p-2 shadow-lg md:top-full md:bottom-auto md:mt-1 md:mb-0">
+            <p className="px-0.5 text-xs font-medium text-zinc-500">種別</p>
+            <div className="mt-1 flex flex-wrap gap-1">
+              {KINDS.map((kind) => {
+                const on = value.kinds.includes(kind.key);
+                const last = on && value.kinds.length === 1;
+                return (
+                  <button
+                    key={kind.key}
+                    type="button"
+                    aria-pressed={on}
+                    aria-disabled={last}
+                    title={last ? "どちらかは表示します" : kind.description}
+                    onClick={() => toggleKind(kind.key)}
+                    className={`flex min-h-9 items-center gap-1 rounded-full border px-2.5 text-[13px] transition-colors ${
+                      on
+                        ? "border-zinc-300 bg-zinc-100 font-medium text-zinc-900"
+                        : "border-zinc-200 bg-white text-zinc-500"
+                    }`}
+                  >
+                    <span
+                      className="size-2 shrink-0 rounded-full ring-1 ring-inset ring-black/10"
+                      style={{ backgroundColor: on ? kind.color : "#d4d4d8" }}
+                    />
+                    {kind.shortLabel}
+                  </button>
+                );
+              })}
+
+              {/*
+                福祉避難所は種別の並びに置く。災害種別（緊急避難場所の属性）とは
+                別の軸で、指定避難所の中の絞り込みにあたるため。
+              */}
+              <button
+                type="button"
+                aria-pressed={value.welfareOnly}
+                title="受入対象者の定めがある指定避難所"
+                onClick={toggleWelfare}
+                className={`flex min-h-9 items-center rounded-full border px-2.5 text-[13px] transition-colors ${
+                  value.welfareOnly
+                    ? "border-zinc-300 bg-zinc-100 font-medium text-zinc-900"
+                    : "border-zinc-200 bg-white text-zinc-500"
+                }`}
+              >
+                福祉避難所
+              </button>
+            </div>
+
+            <p className="mt-3 px-0.5 text-xs font-medium text-zinc-500">
+              災害で絞る
+            </p>
+            <div className="mt-1 flex flex-wrap gap-1">
               {/*
                 **選んでも閉じない。** 複数選ぶ前提なので、1つ押すたびに閉じると
                 開き直しの繰り返しになる。閉じ方は外を押すか Esc（上の effect）。
@@ -266,6 +292,8 @@ export default function ShelterFilterBar({
         福祉避難所は市町村が開設を判断し、対象者も事前に定められていることが多い。
         「最寄りの福祉避難所」を行き先として読まれると、このアプリが
         出してはいけない側の案内になる。ここは字数を惜しまない。
+        **畳んだドロップダウンの中には入れない。** 閉じると消える場所に置くと、
+        絞り込んだまま結果だけを読んでいる人には一度も届かない。
       */}
       {value.welfareOnly && (
         <p className="px-4 pb-2 text-xs leading-relaxed text-zinc-600">
@@ -304,7 +332,7 @@ function DisasterChip({
       aria-pressed={selected}
       title={title}
       onClick={onClick}
-      className={`min-h-10 shrink-0 rounded-full border px-3 text-xs whitespace-nowrap transition-colors ${
+      className={`min-h-9 shrink-0 rounded-full border px-2.5 text-[13px] whitespace-nowrap transition-colors ${
         selected
           ? "border-zinc-900 bg-zinc-900 font-medium text-white"
           : "border-zinc-200 bg-white text-zinc-600"
