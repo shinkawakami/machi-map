@@ -29,7 +29,7 @@ export default function PrintPage() {
       <div className="no-print flex items-center gap-2 border-b border-zinc-200 px-4 py-2">
         <Link
           href="/"
-          className="text-xs text-zinc-500 underline underline-offset-2 hover:text-zinc-900"
+          className="text-sm text-zinc-500 underline underline-offset-2 hover:text-zinc-900"
         >
           ← 地図に戻る
         </Link>
@@ -37,7 +37,7 @@ export default function PrintPage() {
           type="button"
           onClick={() => window.print()}
           disabled={!canPrint}
-          className="ml-auto min-h-9 rounded-lg bg-zinc-900 px-3 text-xs font-medium text-white disabled:opacity-50"
+          className="ml-auto min-h-10 rounded-lg bg-zinc-900 px-4 text-sm font-medium text-white disabled:opacity-50"
         >
           {ready ? "印刷する" : "調べています…"}
         </button>

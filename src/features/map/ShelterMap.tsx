@@ -453,7 +453,7 @@ export default function ShelterMap() {
             <p className="text-sm font-semibold text-zinc-900">
               この範囲は広すぎて、避難場所を出せません
             </p>
-            <p className="mt-1 text-xs leading-relaxed text-zinc-600">
+            <p className="mt-1 text-sm leading-relaxed text-zinc-600">
               調べたい場所まで寄ってください。
               <br />
               <strong className="font-medium text-zinc-900">

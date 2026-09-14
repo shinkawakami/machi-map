@@ -23,8 +23,8 @@ export default function EmptyState({
   onEnterAddress: () => void;
 }) {
   return (
-    <div className="px-3 py-3">
-      <p className="text-xs leading-relaxed text-zinc-600">
+    <div className="px-4 py-4">
+      <p className="text-sm leading-relaxed text-zinc-600">
         いまは<span className="font-medium text-zinc-900">例として東京の地図</span>
         を出しています。
         <strong className="font-medium text-zinc-900">調べたい場所を決める</strong>
@@ -49,7 +49,7 @@ export default function EmptyState({
         </button>
       </div>
 
-      <p className="mt-2 text-[11px] leading-relaxed text-zinc-500">
+      <p className="mt-2 text-xs leading-relaxed text-zinc-500">
         地図を押して決めることもできます（遠いときは、押すたびに寄ります）。
       </p>
     </div>

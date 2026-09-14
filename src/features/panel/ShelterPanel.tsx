@@ -131,7 +131,7 @@ export default function ShelterPanel({
         慣習でもあるし、場所を決め直すのに別の画面を経由させる必要がなくなる。
         地図に重ねないのは、操作をパネルに集める整理に合わせたため。
       */}
-      <div className="shrink-0 border-b border-zinc-100 px-3 pb-2 md:pt-2">
+      <div className="shrink-0 border-b border-zinc-100 px-4 pb-2 md:pt-2">
         {collapsed ? (
           <button
             type="button"
@@ -139,16 +139,16 @@ export default function ShelterPanel({
             aria-expanded={false}
             className="flex w-full items-center gap-2 py-1.5 text-left"
           >
-            <span className="min-w-0 flex-1 truncate text-xs font-semibold text-zinc-700">
+            <span className="min-w-0 flex-1 truncate text-sm font-semibold text-zinc-700">
               {origin ? originLabel(origin) : TITLES.start}
             </span>
-            <span className="shrink-0 text-[11px] text-zinc-500">開く</span>
+            <span className="shrink-0 text-xs text-zinc-500">開く</span>
           </button>
         ) : (
           <>
             <AddressSearch onPick={onPickAddress} inputRef={searchRef} />
             {locateError && (
-              <p className="mt-1 text-[11px] text-zinc-500">{locateError}</p>
+              <p className="mt-1 text-xs text-zinc-500">{locateError}</p>
             )}
           </>
         )}
@@ -159,9 +159,10 @@ export default function ShelterPanel({
         以前は「場所を決める」という画面を経由しないと切り替えられなかったが、
         住所は上の検索、現在地は地図右上のボタン、地図は押すだけ、と
         他の決め方がすべて常設になったので、この一覧だけのために画面を1つ持つ理由が無い。
+
       */}
       {!collapsed && places.length > 0 && (
-        <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-zinc-100 px-3 py-2">
+        <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-zinc-100 px-4 py-2">
           {places.map((place) => {
             const current = origin?.name === place.name;
             return (
@@ -169,7 +170,7 @@ export default function ShelterPanel({
                 <button
                   type="button"
                   onClick={() => onSelectPlace(place)}
-                  className={`min-h-8 rounded-full border px-3 text-xs font-medium transition-colors ${
+                  className={`min-h-10 rounded-full border px-3.5 text-sm font-medium transition-colors ${
                     current
                       ? "border-amber-300 bg-amber-50 text-zinc-900"
                       : "border-zinc-300 text-zinc-700 hover:bg-zinc-50"
@@ -190,7 +191,7 @@ export default function ShelterPanel({
                     type="button"
                     aria-label={`${place.name}を削除`}
                     onClick={() => onRemovePlace(place.name)}
-                    className="flex size-8 shrink-0 items-center justify-center rounded text-[11px] text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900"
+                    className="flex size-10 shrink-0 items-center justify-center rounded text-sm text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900"
                   >
                     ✕
                   </button>
@@ -235,16 +236,16 @@ export default function ShelterPanel({
         1行まるごと使うほどの情報ではなかった。
       */}
       {view.state === "detail" && !collapsed && (
-        <div className="flex shrink-0 items-center gap-2 border-b border-zinc-100 px-3 py-1.5">
+        <div className="flex shrink-0 items-center gap-2 border-b border-zinc-100 px-4 py-1">
           <button
             type="button"
             onClick={() => onShow(view.from)}
-            className="rounded px-2 py-1 text-xs text-zinc-500 hover:text-zinc-900"
+            className="-ml-2 flex min-h-10 items-center rounded px-2 text-sm text-zinc-500 hover:text-zinc-900"
           >
             {/* 起点がまだ無いときの戻り先は表でも一覧でもなく、場所を決める案内。 */}
             ← {!origin ? "戻る" : view.from === "summary" ? "表" : "一覧"}
           </button>
-          <h2 className="text-xs font-semibold text-zinc-700">
+          <h2 className="text-sm font-semibold text-zinc-700">
             {TITLES.detail}
           </h2>
         </div>
@@ -258,7 +259,7 @@ export default function ShelterPanel({
         どちらかに片寄せると片方が行き止まりになる。
       */}
       {reading && !collapsed && (
-        <div className="flex shrink-0 items-center gap-1 border-b border-zinc-100 px-3 py-1.5">
+        <div className="flex shrink-0 items-center gap-1 border-b border-zinc-100 px-4 py-1.5">
           <Tab
             active={view.state === "summary"}
             onClick={() => onShow("summary")}
@@ -300,7 +301,7 @@ export default function ShelterPanel({
 
       {/* 保存ボタンが出ない理由のうち、上限のほうは言わないと分からない。 */}
       {!collapsed && saveFull && (
-        <p className="shrink-0 border-t border-zinc-100 bg-zinc-50 px-3 py-2 text-[11px] leading-relaxed text-zinc-600">
+        <p className="shrink-0 border-t border-zinc-100 bg-zinc-50 px-4 py-2.5 text-xs leading-relaxed text-zinc-600">
           拠点は{MAX_PLACES}つまでです。ここを拠点にするには、上の★から
           要らないものを消してください。
         </p>
@@ -325,14 +326,14 @@ export default function ShelterPanel({
             <button
               type="button"
               onClick={onSavePlace}
-              className="flex flex-1 flex-col items-center border-t border-amber-300 bg-amber-400 px-3 py-2.5 text-center transition-colors hover:bg-amber-300"
+              className="flex flex-1 flex-col items-center border-t border-amber-300 bg-amber-400 px-4 py-3 text-center transition-colors hover:bg-amber-300"
             >
               <span className="text-sm font-semibold text-zinc-900">
                 ★ 拠点として保存
               </span>
               {/* 保存の value は、まだ1つも持っていない人にだけ要る。 */}
               {places.length === 0 && (
-                <span className="text-[11px] leading-snug text-zinc-800">
+                <span className="text-xs leading-snug text-zinc-800">
                   次から1タップで開けて、家族に送ったり紙に出したりできます
                 </span>
               )}
@@ -342,7 +343,7 @@ export default function ShelterPanel({
             <button
               type="button"
               onClick={onShare}
-              className="flex flex-1 items-center justify-center gap-2 bg-zinc-900 px-3 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-zinc-800"
+              className="flex flex-1 items-center justify-center gap-2 bg-zinc-900 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-zinc-800"
             >
               <QrIcon />
               送る・紙に出す
@@ -368,12 +369,12 @@ function UndoBar({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex shrink-0 items-center gap-2 border-b border-zinc-100 bg-zinc-900 px-3 py-2 text-xs text-white">
+    <div className="flex shrink-0 items-center gap-2 border-b border-zinc-100 bg-zinc-900 px-4 py-1.5 text-sm text-white">
       <span className="min-w-0 flex-1 truncate">{children}</span>
       <button
         type="button"
         onClick={onUndo}
-        className="shrink-0 rounded border border-white/30 px-2 py-1 text-[11px] font-medium hover:bg-white/10"
+        className="flex min-h-9 shrink-0 items-center rounded-lg border border-white/30 px-3 text-xs font-medium hover:bg-white/10"
       >
         元に戻す
       </button>
@@ -399,8 +400,10 @@ function Tab({
         **押して切り替わるものは、指で押せる大きさにする。**
         11px・py-1 で実測 24px しかなく、地図右上の現在地ボタンを 40px に上げた
         ときの基準（記号だけ・小さすぎる的をやめる）と食い違っていた。
+        いちど 36px に上げたが、**基準そのものが主流より低かった**ので 40px に揃えた
+        （iOS は 44、Material は 48 が最小。パネル内のチップ類も同じ 40px に寄せてある）。
       */
-      className={`min-h-9 rounded-full px-3 text-xs font-medium transition-colors ${
+      className={`min-h-10 rounded-full px-4 text-sm font-medium transition-colors ${
         active
           ? "bg-zinc-900 text-white"
           : "border border-zinc-200 text-zinc-500 hover:text-zinc-900"

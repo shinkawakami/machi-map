@@ -53,7 +53,7 @@ export default function ShelterDetailView({
           {kinds.map((kind) => (
             <span
               key={kind}
-              className="inline-block rounded-full px-2 py-0.5 text-[11px] text-white"
+              className="inline-block rounded-full px-2 py-0.5 text-xs text-white"
               style={{ backgroundColor: kindOf(kind).color }}
             >
               {kindOf(kind).label}
@@ -63,7 +63,7 @@ export default function ShelterDetailView({
         <h2 className="mt-1 text-base leading-snug font-semibold text-zinc-900">
           {detail.name}
         </h2>
-        <p className="mt-0.5 text-xs text-zinc-500">{detail.address}</p>
+        <p className="mt-0.5 text-[13px] text-zinc-500">{detail.address}</p>
         {/*
           **調べた先と、実際に行くことのあいだを埋める。**
           このアプリが出せるのは直線距離までで、川や崖を挟んでいても短く出る。
@@ -78,13 +78,13 @@ export default function ShelterDetailView({
           href={`https://www.google.com/maps/dir/?api=1&destination=${detail.lat},${detail.lng}&travelmode=walking`}
           target="_blank"
           rel="noreferrer"
-          className="mt-2 inline-flex min-h-8 items-center rounded-full border border-zinc-300 px-3 text-xs font-medium text-zinc-800 transition-colors hover:bg-zinc-50"
+          className="mt-2 inline-flex min-h-10 items-center rounded-full border border-zinc-300 px-4 text-sm font-medium text-zinc-800 transition-colors hover:bg-zinc-50"
         >
           徒歩の経路を見る（Google マップ）↗
         </a>
         {/* 畳んだ1行が自分で名乗るので、そのときはこの断りは要らない。 */}
         {full.length > 1 && (
-          <p className="mt-1 text-xs leading-relaxed text-zinc-600">
+          <p className="mt-1 text-sm leading-relaxed text-zinc-600">
             この場所には
             <strong className="font-semibold text-zinc-900">
               複数の指定
@@ -108,14 +108,14 @@ export default function ShelterDetailView({
         ここで残るのは「住所は同じだが名前が違う」もので、同じ施設とは限らない。
       */}
       {detail.others.length === 0 && detail.sameAddressAsOther && (
-        <p className="rounded bg-zinc-50 px-2 py-1.5 text-xs leading-relaxed text-zinc-600">
+        <p className="rounded bg-zinc-50 px-3 py-2 text-sm leading-relaxed text-zinc-600">
           同じ住所に{otherKind.label}
           の指定もあります（国土地理院のデータ上の住所が一致するという意味で、
           同じ施設とは限りません）。
         </p>
       )}
 
-      <p className="border-t border-zinc-100 pt-2 text-[11px] leading-relaxed text-zinc-500">
+      <p className="border-t border-zinc-100 pt-2 text-xs leading-relaxed text-zinc-500">
         最新かつ詳細な情報は、必ず市町村にご確認ください。
       </p>
     </div>
@@ -190,7 +190,7 @@ function CompactDesignation({ block }: { block: Block }) {
         className="mt-1 size-2 shrink-0 rounded-full"
         style={{ backgroundColor: kind.color }}
       />
-      <p className="text-xs leading-relaxed text-zinc-600">
+      <p className="text-sm leading-relaxed text-zinc-600">
         <strong className="font-semibold text-zinc-900">
           {kind.label}でもあります。
         </strong>
@@ -214,7 +214,7 @@ function Designation({
   return (
     <div className={labelled ? "border-t border-zinc-100 pt-2.5" : ""}>
       {labelled && (
-        <h3 className="flex items-center gap-1.5 text-xs font-semibold text-zinc-900">
+        <h3 className="flex items-center gap-1.5 text-sm font-semibold text-zinc-900">
           <span
             className="size-2 shrink-0 rounded-full"
             style={{ backgroundColor: kind.color }}
@@ -222,14 +222,14 @@ function Designation({
           {kind.label}
         </h3>
       )}
-      <p className={`text-xs text-zinc-600 ${labelled ? "mt-0.5" : ""}`}>
+      <p className={`text-sm text-zinc-600 ${labelled ? "mt-0.5" : ""}`}>
         {kind.description}
       </p>
 
       <section className="mt-2">
         <h4 className="text-xs font-semibold text-zinc-500">対応する災害</h4>
         {block.disasters === null ? (
-          <p className="mt-1 text-xs leading-relaxed text-zinc-600">
+          <p className="mt-1 text-sm leading-relaxed text-zinc-600">
             指定避難所には災害種別の指定がありません。
             災害の種類ごとに使える・使えないが分かれるのは指定緊急避難場所のほうです。
           </p>
@@ -241,7 +241,7 @@ function Designation({
                 <li
                   key={disaster.key}
                   title={disaster.sourceLabel}
-                  className={`rounded border px-1.5 py-0.5 text-xs ${
+                  className={`rounded border px-2 py-1 text-xs ${
                     on
                       ? "border-emerald-200 bg-emerald-50 text-emerald-900"
                       : "border-zinc-200 bg-zinc-50 text-zinc-500"
@@ -274,7 +274,7 @@ function Field({ label, values }: { label: string; values: string[] }) {
       {values.map((value) => (
         <p
           key={value}
-          className="mt-0.5 text-xs leading-relaxed whitespace-pre-wrap text-zinc-700"
+          className="mt-0.5 text-sm leading-relaxed whitespace-pre-wrap text-zinc-700"
         >
           {value}
         </p>

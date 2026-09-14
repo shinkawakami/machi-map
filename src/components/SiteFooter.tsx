@@ -4,10 +4,10 @@ import Link from "next/link";
  * 出典表示は国土地理院コンテンツ利用規約（公共データ利用規約 PDL1.0）上の義務。
  * 加工しているので「もとに作成」の一文も省略できない。常設し、消さない。
  *
- * **ただし常設と全文常時表示は別の話。** 全文は 11px で6行あり、iPhone 幅では
- * **約 120px** を固定で食う。ヘッダ（約 37px）と合わせると、iPhone SE 相当
- * （667px）では地図に使える高さが 506px まで落ち、そこへ下のシートが 65% 入るので、
- * **見えている地図は 175px 前後**しか残らない。地図が主役の画面で、この配分は逆。
+ * **ただし常設と全文常時表示は別の話。** 全文は 12px で6行あり、iPhone 幅では
+ * **約 130px** を固定で食う。ヘッダ（約 57px）と合わせると、iPhone SE 相当
+ * （667px）では地図に使える高さが 480px まで落ち、そこへ下のシートが 65% 入るので、
+ * **見えている地図は 170px 前後**しか残らない。地図が主役の画面で、この配分は逆。
  *
  * そこで**権利者と「もとに作成」の一文だけを常に見せ、残りを開いて読む形**にした。
  * 3つのデータ源の権利者（国土地理院・国土交通省）は畳んだ状態でも名乗っているし、
@@ -16,24 +16,24 @@ import Link from "next/link";
  */
 export default function SiteFooter() {
   return (
-    <footer className="shrink-0 border-t border-zinc-200 bg-white text-[11px] leading-relaxed text-zinc-500">
+    <footer className="shrink-0 border-t border-zinc-200 bg-white text-xs leading-relaxed text-zinc-500">
       <details className="group">
         {/*
           畳んだときに残る1行。**権利者名と「もとに作成」を落とさない。**
           リンクは開いた側に置く（summary の中のリンクは、押すと開閉も一緒に起きる）。
         */}
-        <summary className="flex cursor-pointer list-none items-baseline gap-1.5 px-3 py-2 marker:content-none hover:text-zinc-700">
+        <summary className="flex cursor-pointer list-none items-baseline gap-1.5 px-4 py-2.5 marker:content-none hover:text-zinc-700">
           {/* 幅が足りないときは折り返す。出典は切り詰めない。 */}
           <span className="min-w-0 flex-1">
             出典：国土地理院・国土交通省のデータをもとに作成
           </span>
-          <span className="shrink-0 text-zinc-400 group-open:hidden">詳しく ▾</span>
-          <span className="hidden shrink-0 text-zinc-400 group-open:inline">
+          <span className="shrink-0 text-zinc-500 group-open:hidden">詳しく ▾</span>
+          <span className="hidden shrink-0 text-zinc-500 group-open:inline">
             閉じる ▴
           </span>
         </summary>
 
-        <div className="px-3 pb-2">
+        <div className="px-4 pb-2.5">
           <p>
             出典：
             <a

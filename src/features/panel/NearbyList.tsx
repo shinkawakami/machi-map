@@ -65,7 +65,7 @@ export default function NearbyList({
                 onFocus(item);
                 setOpenId(item.id === openId ? null : item.id);
               }}
-              className={`block w-full px-3 py-2.5 text-left hover:bg-zinc-50 ${
+              className={`block w-full px-4 py-3 text-left hover:bg-zinc-50 ${
                 item.id === openId ? "bg-zinc-50" : ""
               }`}
             >
@@ -83,7 +83,7 @@ export default function NearbyList({
                       : undefined,
                   }}
                 />
-                <span className="min-w-0 flex-1 truncate text-sm font-semibold text-zinc-900">
+                <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-zinc-900">
                   {item.name}
                 </span>
                 {/*
@@ -91,15 +91,15 @@ export default function NearbyList({
                   もう一方の指定があることは文字でも書く。
                 */}
                 {item.alsoKind && (
-                  <span className="shrink-0 rounded-full border border-zinc-300 px-1.5 text-[10px] text-zinc-600">
+                  <span className="shrink-0 rounded-full border border-zinc-300 px-2 text-xs text-zinc-600">
                     {kindOf(item.alsoKind).shortLabel}も
                   </span>
                 )}
-                <span className="shrink-0 text-xs font-semibold text-zinc-900 tabular-nums">
+                <span className="shrink-0 text-sm font-semibold text-zinc-900 tabular-nums">
                   {formatDistance(item.distanceM)}
                 </span>
               </span>
-              <span className="mt-0.5 block truncate text-xs text-zinc-500">
+              <span className="mt-0.5 block truncate text-[13px] text-zinc-500">
                 {item.disasters === null
                   ? "災害種別の指定なし"
                   : item.disasters.map((d) => disasterLabel(d)).join("・")}
@@ -109,7 +109,7 @@ export default function NearbyList({
           </li>
         ))}
       </ul>
-      <p className="px-3 py-2 text-[11px] leading-relaxed text-zinc-500">
+      <p className="px-4 py-2.5 text-xs leading-relaxed text-zinc-500">
         半径{Math.round(result.radiusM / 1000)}km まで探しました
         {result.exhausted && "（これ以上は見つかりませんでした）"}。
         距離は直線距離で、実際の道のりではありません。

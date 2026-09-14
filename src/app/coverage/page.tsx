@@ -29,7 +29,7 @@ export default async function CoveragePage() {
       <header className="flex shrink-0 items-center gap-3 border-b border-zinc-200 bg-white px-3 py-2">
         <Link
           href="/"
-          className="shrink-0 rounded-full border border-zinc-200 px-2.5 py-1 text-xs text-zinc-600 transition-colors hover:bg-zinc-50"
+          className="flex min-h-10 shrink-0 items-center rounded-full border border-zinc-200 px-3 text-xs text-zinc-600 transition-colors hover:bg-zinc-50"
         >
           ← 地図
         </Link>
@@ -42,7 +42,7 @@ export default async function CoveragePage() {
           スクロールを持つ。 */}
       <main className="flex-1 overflow-y-auto">
         <div className="mx-auto flex max-w-3xl flex-col gap-8 px-4 py-6">
-          <section className="flex flex-col gap-3 text-[13px] leading-relaxed text-zinc-600">
+          <section className="flex flex-col gap-3 text-sm leading-relaxed text-zinc-600">
             <p>
               この地図に出ているのは、
               <strong className="font-semibold text-zinc-900">
@@ -80,7 +80,7 @@ export default async function CoveragePage() {
             <h2 className="text-sm font-semibold text-zinc-900">
               片方しか公開されていない市町村（{partial}）
             </h2>
-            <p className="text-[13px] leading-relaxed text-zinc-600">
+            <p className="text-sm leading-relaxed text-zinc-600">
               「指定緊急避難場所」と「指定避難所」は別のもので、登録も別々です。
               どちらか片方だけが公開されている市町村では、
               <strong className="font-semibold text-zinc-900">
@@ -109,13 +109,13 @@ export default async function CoveragePage() {
             <h2 className="text-sm font-semibold text-zinc-900">
               データが登録されていない市町村（{none.length}）
             </h2>
-            <p className="text-[13px] leading-relaxed text-zinc-600">
+            <p className="text-sm leading-relaxed text-zinc-600">
               避難場所そのものが無いわけではありません。国土地理院のこのデータに
               登録がない、という意味です。避難場所は各市町村が指定しているので、
               住んでいる市町村のウェブサイトで確認してください。
             </p>
             <CoverageList color="#a1a1aa" rows={none} />
-            <p className="text-[11px] leading-relaxed text-zinc-500">
+            <p className="text-xs leading-relaxed text-zinc-500">
               「北方領土」と付けた6村は、他の未登録の市町村とは事情が異なります。
             </p>
           </section>
@@ -124,7 +124,7 @@ export default async function CoveragePage() {
             <h2 className="text-sm font-semibold text-zinc-900">
               数字で示せない欠けもあります
             </h2>
-            <p className="text-[13px] leading-relaxed text-zinc-600">
+            <p className="text-sm leading-relaxed text-zinc-600">
               上の数字は<strong className="font-semibold text-zinc-900">市町村の単位</strong>
               の話です。市町村が公開していても、
               <strong className="font-semibold text-zinc-900">
@@ -134,13 +134,13 @@ export default async function CoveragePage() {
               明記しています）。これは公開されていない以上こちらからは数えられないので、
               件数では示せません。
             </p>
-            <p className="text-[13px] leading-relaxed text-zinc-600">
+            <p className="text-sm leading-relaxed text-zinc-600">
               また、このデータは随時更新されます。最新かどうか、詳しい条件がどうなっているかは、
               必ず当該市町村に確認してください。
             </p>
           </section>
 
-          <section className="flex flex-col gap-1 border-t border-zinc-200 pt-4 text-[11px] text-zinc-500">
+          <section className="flex flex-col gap-1 border-t border-zinc-200 pt-4 text-xs text-zinc-500">
             <p>
               いま出している指定の件数: {KINDS[0].label}{" "}
               {formatCount(coverage.shelterTotals.emergency)} 件 /{" "}
@@ -182,11 +182,11 @@ function Stat({
 }) {
   return (
     <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2">
-      <p className="text-[11px] text-zinc-500">{label}</p>
+      <p className="text-xs text-zinc-500">{label}</p>
       <p className="mt-0.5 text-lg font-semibold text-zinc-900">
         {formatCount(value)}
       </p>
-      <p className="text-[11px] text-zinc-500">{percent(value, total)}</p>
+      <p className="text-xs text-zinc-500">{percent(value, total)}</p>
     </div>
   );
 }
@@ -215,7 +215,7 @@ function CoverageList({
           <span className="text-[13px] font-semibold text-zinc-900">
             {title}（{rows.length}）
           </span>
-          {note && <span className="text-[11px] text-zinc-500">{note}</span>}
+          {note && <span className="text-xs text-zinc-500">{note}</span>}
         </div>
       )}
       <ul className="divide-y divide-zinc-100">
@@ -227,11 +227,11 @@ function CoverageList({
             <span className="text-zinc-500">{row.prefecture}</span>
             <span className="font-medium text-zinc-900">{row.name}</span>
             {row.disputed && (
-              <span className="rounded border border-zinc-200 px-1 text-[10px] text-zinc-500">
+              <span className="rounded border border-zinc-200 px-1 text-xs text-zinc-500">
                 北方領土
               </span>
             )}
-            <span className="ml-auto shrink-0 text-[11px] text-zinc-500">
+            <span className="ml-auto shrink-0 text-xs text-zinc-500">
               {KINDS[0].shortLabel} {formatCount(row.emergencyCount)} /{" "}
               {KINDS[1].shortLabel} {formatCount(row.shelterCount)}
             </span>

@@ -18,7 +18,7 @@ export default function UrlPlacesPrompt({ offered }: { offered: Place[] }) {
       <p className="text-sm font-semibold text-zinc-900">
         この URL に{offered.length}つの場所が入っています
       </p>
-      <p className="mt-1 text-xs leading-relaxed text-zinc-500">
+      <p className="mt-1 text-sm leading-relaxed text-zinc-500">
         {offered.map((p) => p.name).join("・")}
         。この端末には別の拠点が保存されています。どちらを使いますか。
       </p>

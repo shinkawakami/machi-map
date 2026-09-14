@@ -63,11 +63,16 @@ export default function IntroCard() {
 
   return (
     <>
+      {/*
+        説明を読み直す唯一の入口。**記号1つでも的は 44px 取る。**
+        px-2 py-0.5 で実測 22px しかなく、iOS の最小（44px）の半分だった。
+        ヘッダの高さはこのボタンで決まるが、56px は主流の範囲（Material 56dp）に収まる。
+      */}
       <button
         type="button"
         aria-label="このサイトについて"
         onClick={() => setDismissed(false)}
-        className="ml-auto shrink-0 rounded-full border border-zinc-200 px-2 py-0.5 text-xs text-zinc-500 transition-colors hover:bg-zinc-50"
+        className="ml-auto flex size-11 shrink-0 items-center justify-center rounded-full border border-zinc-200 text-base text-zinc-600 transition-colors hover:bg-zinc-50"
       >
         ？
       </button>
@@ -97,14 +102,14 @@ export default function IntroCard() {
             onClick={(e) => e.stopPropagation()}
             className="mx-auto mt-auto w-full max-w-md rounded-xl border border-zinc-200 bg-white p-4 shadow-xl outline-none sm:m-auto"
           >
-            <p className="text-[11px] font-medium tracking-wide text-zinc-500">
+            <p className="text-xs font-medium tracking-wide text-zinc-500">
               この地図が答えること
             </p>
             <h2 className="mt-1 text-base leading-snug font-semibold text-zinc-900">
               この災害のとき、近くのどこへ逃げられるか
             </h2>
 
-            <ul className="mt-3 flex flex-col gap-3 text-[13px] leading-relaxed text-zinc-600">
+            <ul className="mt-3 flex flex-col gap-3 text-sm leading-relaxed text-zinc-600">
               <li>
                 <span className="font-semibold text-zinc-900">
                   避難場所は、災害の種類ごとに使える・使えないが分かれています。
@@ -137,7 +142,7 @@ export default function IntroCard() {
               </li>
             </ul>
 
-            <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-[12px] leading-relaxed text-zinc-700">
+            <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm leading-relaxed text-zinc-700">
               <span className="font-semibold text-zinc-900">
                 自宅・職場を「拠点」として保存できます。
               </span>
@@ -146,7 +151,7 @@ export default function IntroCard() {
               紙にも出せます。
             </p>
 
-            <p className="mt-3 border-t border-zinc-100 pt-3 text-[11px] leading-relaxed text-zinc-500">
+            <p className="mt-3 border-t border-zinc-100 pt-3 text-xs leading-relaxed text-zinc-500">
               データは市町村が公開に同意したものに限られます（下の出典と注意書きを参照）。
             </p>
 

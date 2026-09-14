@@ -5,8 +5,8 @@ import SiteFooter from "@/components/SiteFooter";
 export default function Home() {
   return (
     <>
-      <header className="flex shrink-0 items-center gap-2 border-b border-zinc-200 bg-white px-3 py-2">
-        <h1 className="min-w-0 truncate text-sm font-semibold text-zinc-900">
+      <header className="flex shrink-0 items-center gap-2 border-b border-zinc-200 bg-white px-4 py-1.5">
+        <h1 className="min-w-0 truncate text-base font-semibold text-zinc-900">
           わが家の逃げ先
           {/*
             5秒で伝える1行。**説明ではなく、やってほしいことと見返りを書く。**

@@ -132,7 +132,7 @@ function labelledMarker({
 
   el.innerHTML =
     svg +
-    `<span style="padding:1px 6px;border-radius:9999px;background:rgba(255,255,255,0.92);border:1px solid rgba(82,82,91,0.25);color:#27272a;font-size:11px;font-weight:600;white-space:nowrap">${label}</span>`;
+    `<span style="padding:2px 7px;border-radius:9999px;background:rgba(255,255,255,0.92);border:1px solid rgba(82,82,91,0.25);color:#27272a;font-size:12px;font-weight:600;white-space:nowrap">${label}</span>`;
 
   el.addEventListener("click", onClick);
   return el;

@@ -3,7 +3,7 @@
 /** 読み込み中・失敗・0件のような、中身の代わりに置く1文。 */
 export function Message({ children }: { children: React.ReactNode }) {
   return (
-    <p className="px-3 py-6 text-center text-xs leading-relaxed text-zinc-500">
+    <p className="px-4 py-6 text-center text-sm leading-relaxed text-zinc-500">
       {children}
     </p>
   );

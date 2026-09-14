@@ -66,7 +66,7 @@ export default function SummaryTable({
         断り書きを置く理由はない。食い違いが起きた人にだけ、その場で言う。
       */}
       {filterBadges(filter).length > 0 && (
-        <p className="border-b border-zinc-100 px-3 py-1.5 text-[11px] leading-relaxed text-zinc-500">
+        <p className="border-b border-zinc-100 px-4 py-2 text-xs leading-relaxed text-zinc-500">
           絞り込んでいても、この表は8種すべてを出します
           （絞り込みは地図と「近い順」に効きます）。
         </p>
@@ -95,7 +95,7 @@ export default function SummaryTable({
         混ぜると「この災害で使える避難所」と読まれる。
       */}
       <div className="border-t-4 border-zinc-100">
-        <p className="px-3 pt-2 text-[11px] text-zinc-500">
+        <p className="px-4 pt-2.5 text-xs text-zinc-500">
           災害がおさまったあと、生活する場所（{kindOf("SHELTER").label}）
         </p>
         <SummaryGroupView
@@ -112,7 +112,7 @@ export default function SummaryTable({
         />
       </div>
 
-      <p className="px-3 py-2 text-[11px] leading-relaxed text-zinc-500">
+      <p className="px-4 py-2.5 text-xs leading-relaxed text-zinc-500">
         半径{Math.round(summary.radiusM / 1000)}km まで探しました。
         距離は直線距離で、実際の道のりではありません。
         {explained &&
@@ -146,21 +146,21 @@ function SummaryGroupView({
 }) {
   const { item, far } = group;
   const heading = title && (
-    <span className="block text-xs font-semibold text-zinc-900">{title}</span>
+    <span className="block text-sm font-semibold text-zinc-900">{title}</span>
   );
 
   // 押す先が無いので、ボタンにしない。
   if (!item) {
     return (
-      <div className="px-3 py-2.5">
+      <div className="px-4 py-3">
         {heading}
         <p className={`flex items-center gap-1.5 ${title ? "mt-1" : ""}`}>
           <MissingDot />
-          <span className="text-sm font-semibold text-zinc-900">
+          <span className="text-[15px] font-semibold text-zinc-900">
             近くにありません
           </span>
         </p>
-        <p className="mt-0.5 text-xs leading-relaxed text-zinc-600">
+        <p className="mt-0.5 text-[13px] leading-relaxed text-zinc-600">
           探した範囲に、その災害で使える指定がありませんでした。
         </p>
       </div>
@@ -176,7 +176,7 @@ function SummaryGroupView({
           onFocus(item);
           onToggle(open ? null : item.id);
         }}
-        className={`block w-full px-3 py-2.5 text-left hover:bg-zinc-50 ${
+        className={`block w-full px-4 py-3 text-left hover:bg-zinc-50 ${
           open ? "bg-zinc-50" : ""
         }`}
       >
@@ -190,18 +190,18 @@ function SummaryGroupView({
               style={{ backgroundColor: kindOf(item.kind).color }}
             />
           )}
-          <span className="min-w-0 flex-1 truncate text-sm font-semibold text-zinc-900">
+          <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-zinc-900">
             {far ? "近くにありません" : item.name}
           </span>
           {/* 遠い行の距離は答えの顔をさせない。下の1行に回す。 */}
           {!far && (
-            <span className="shrink-0 text-xs font-semibold text-zinc-900 tabular-nums">
+            <span className="shrink-0 text-sm font-semibold text-zinc-900 tabular-nums">
               {formatDistance(item.distanceM)}
             </span>
           )}
         </span>
         <span
-          className={`mt-0.5 block truncate text-xs ${
+          className={`mt-0.5 block truncate text-[13px] ${
             far ? "text-zinc-600" : "text-zinc-500"
           }`}
         >

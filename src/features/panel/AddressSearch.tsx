@@ -132,11 +132,11 @@ export default function AddressSearch({
         aria-controls={visible.length > 0 ? listId : undefined}
         aria-autocomplete="list"
         aria-activedescendant={active >= 0 ? `${listId}-${active}` : undefined}
-        className="w-full rounded-lg border border-zinc-200 bg-white px-2.5 py-2 text-base text-zinc-900 placeholder:text-zinc-500 focus:border-zinc-400 focus:ring-2 focus:ring-zinc-900/10 focus:outline-none"
+        className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-base text-zinc-900 placeholder:text-zinc-500 focus:border-zinc-400 focus:ring-2 focus:ring-zinc-900/10 focus:outline-none"
       />
 
       {failed && (
-        <p className="mt-1 text-[11px] text-zinc-500">
+        <p className="mt-1 text-xs text-zinc-500">
           住所を引けませんでした。地図を動かして決めることもできます。
         </p>
       )}
@@ -172,7 +172,7 @@ export default function AddressSearch({
       )}
 
       {ready && !failed && visible.length === 0 && (
-        <p className="mt-1 text-[11px] text-zinc-500">
+        <p className="mt-1 text-xs text-zinc-500">
           該当する町名が見つかりません（番地までは持っていません）
         </p>
       )}

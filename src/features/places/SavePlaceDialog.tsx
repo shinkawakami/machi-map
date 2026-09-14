@@ -47,7 +47,7 @@ export default function SavePlaceDialog({
       <p className="text-sm font-semibold text-zinc-900">
         この場所を拠点として保存します
       </p>
-      <p className="mt-1 text-xs leading-relaxed text-zinc-500">
+      <p className="mt-1 text-sm leading-relaxed text-zinc-500">
         保存した拠点は URL に入ります。次に開くときも、家族に送るときも、
         この URL が正本です。
       </p>
@@ -58,7 +58,7 @@ export default function SavePlaceDialog({
             key={preset}
             type="button"
             onClick={() => choose(preset)}
-            className={`min-h-9 rounded-full border px-3 text-sm transition-colors ${
+            className={`min-h-10 rounded-full border px-3.5 text-sm transition-colors ${
               confirming === preset
                 ? "border-amber-400 bg-amber-50 font-semibold text-zinc-900"
                 : "border-zinc-300 text-zinc-800 hover:bg-zinc-50"
@@ -66,7 +66,7 @@ export default function SavePlaceDialog({
           >
             {preset}
             {usedNames.includes(preset) && (
-              <span className="ml-1 text-[10px] text-zinc-500">
+              <span className="ml-1 text-xs text-zinc-500">
                 {confirming === preset ? "もう一度" : "上書き"}
               </span>
             )}
@@ -75,7 +75,7 @@ export default function SavePlaceDialog({
       </div>
 
       {confirming && (
-        <p role="status" className="mt-1.5 text-[11px] leading-relaxed text-zinc-700">
+        <p role="status" className="mt-1.5 text-xs leading-relaxed text-zinc-700">
           いまの「{confirming}」は、この場所に置き換わります。
           続けるなら、もう一度押してください。
         </p>
@@ -102,13 +102,13 @@ export default function SavePlaceDialog({
           placeholder="ほかの名前"
           maxLength={12}
           enterKeyHint="done"
-          className="min-w-0 flex-1 rounded-lg border border-zinc-200 px-2 py-1.5 text-base text-zinc-900 placeholder:text-zinc-500"
+          className="min-h-10 min-w-0 flex-1 rounded-lg border border-zinc-200 px-3 text-base text-zinc-900 placeholder:text-zinc-500"
         />
         <button
           type="button"
           disabled={!cleaned}
           onClick={() => choose(cleaned)}
-          className="shrink-0 rounded-lg bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
+          className="min-h-10 shrink-0 rounded-lg bg-zinc-900 px-4 text-sm font-medium text-white disabled:opacity-40"
         >
           保存
         </button>
@@ -117,7 +117,7 @@ export default function SavePlaceDialog({
         これは注意書きではなく、URL が家族に渡ることの帰結そのもの。
         いちばん薄い色（zinc-400・白地で 2.6:1）で置いていたのを、読める濃さに上げる。
       */}
-      <p className="mt-1.5 text-[11px] leading-relaxed text-zinc-600">
+      <p className="mt-1.5 text-xs leading-relaxed text-zinc-600">
         部屋番号や建物名は入れないでください。URL を見た人に伝わります。
       </p>
 

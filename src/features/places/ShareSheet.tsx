@@ -65,10 +65,10 @@ export default function ShareSheet({
 
       {choosable ? (
         /*
-          **縦に積まない。** 拠点は最大6件だが、名前は「自宅」「職場」のように短い。
+          **縦に積まない。** 拠点は最大5件だが、名前は「自宅」「職場」のように短い。
           1行に1件ずつ並べると、名前の長さに関係なく6行ぶんの高さを使い、
           残りの中身（QR・コピー・印刷・注意書き）を押し出してダイアログが
-          スクロールに落ちる。折り返しのチップなら、同じ6件が1〜2行に収まる。
+          スクロールに落ちる。折り返しのチップなら、同じ5件が1〜2行に収まる。
 
           **このアプリで「複数選ぶ」はすでにこの形。** 拠点の名前を決めるときの
           プリセット（SavePlaceDialog）も、災害種別の絞り込み（ShelterFilterBar）も
@@ -84,7 +84,7 @@ export default function ShareSheet({
                 type="button"
                 aria-pressed={on}
                 onClick={() => toggle(place.name)}
-                className={`min-h-9 rounded-full border px-3 text-sm transition-colors ${
+                className={`min-h-10 rounded-full border px-3.5 text-sm transition-colors ${
                   on
                     ? "border-zinc-900 bg-zinc-900 font-medium text-white"
                     : "border-zinc-300 text-zinc-700 hover:bg-zinc-50"
@@ -96,7 +96,7 @@ export default function ShareSheet({
           })}
         </div>
       ) : (
-        <p className="mt-1 text-xs leading-relaxed text-zinc-500">
+        <p className="mt-1 text-sm leading-relaxed text-zinc-500">
           {places.map((p) => p.name).join("・")}
           が URL に入っています。この URL が正本なので、送っておけば
           端末が変わっても戻せます。
@@ -104,13 +104,13 @@ export default function ShareSheet({
       )}
 
       {chosen.length === 0 ? (
-        <p className="mt-3 rounded-lg bg-zinc-100 px-3 py-4 text-center text-xs text-zinc-600">
+        <p className="mt-3 rounded-lg bg-zinc-100 px-3 py-4 text-center text-sm text-zinc-600">
           送る場所を1つ以上選んでください。
         </p>
       ) : (
         <>
           {choosable && (
-            <p className="mt-2 text-xs leading-relaxed text-zinc-500">
+            <p className="mt-2 text-sm leading-relaxed text-zinc-500">
               {chosen.map((p) => p.name).join("・")}
               が URL に入ります。この URL が正本なので、送っておけば
               端末が変わっても戻せます。
@@ -121,7 +121,7 @@ export default function ShareSheet({
             <QrCode value={url} size={168} />
           </div>
 
-          <p className="mt-2 break-all text-[11px] leading-relaxed text-zinc-500">
+          <p className="mt-2 break-all text-xs leading-relaxed text-zinc-500">
             {url}
           </p>
 
@@ -144,7 +144,7 @@ export default function ShareSheet({
       )}
 
       {/* 後半は「送る前に知っておくこと」なので、薄い色で置かない。 */}
-      <p className="mt-2 text-[11px] leading-relaxed text-zinc-600">
+      <p className="mt-2 text-xs leading-relaxed text-zinc-600">
         災害のときにスマホが使えるとは限りません。紙に出して貼っておくのが確実です。
         URL には選んだ場所の位置が入るので、公開の場には貼らないでください。
       </p>

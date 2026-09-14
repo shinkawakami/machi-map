@@ -139,7 +139,7 @@ export default function ShelterFilterBar({
 
   return (
     <div className="shrink-0 border-b border-zinc-100">
-      <div className="flex flex-wrap items-center gap-1.5 px-3 py-1.5">
+      <div className="flex flex-wrap items-center gap-1.5 px-4 py-2">
         {KINDS.map((kind) => {
           const on = value.kinds.includes(kind.key);
           const last = on && value.kinds.length === 1;
@@ -151,8 +151,8 @@ export default function ShelterFilterBar({
               aria-disabled={last}
               title={last ? "どちらかは表示します" : kind.description}
               onClick={() => toggleKind(kind.key)}
-              // 押して切り替わるものは指で押せる大きさに（横は詰まっているので縦だけ）。
-              className={`flex min-h-8 items-center gap-1 rounded-full border px-2.5 text-[11px] transition-colors ${
+              // 押して切り替わるものは指で押せる大きさに（パネル内のチップは一律 40px）。
+              className={`flex min-h-10 items-center gap-1 rounded-full border px-3 text-xs transition-colors ${
                 on
                   ? "border-zinc-300 bg-zinc-100 font-medium text-zinc-900"
                   : "border-zinc-200 bg-white text-zinc-500"
@@ -176,7 +176,7 @@ export default function ShelterFilterBar({
           aria-pressed={value.welfareOnly}
           title="受入対象者の定めがある指定避難所"
           onClick={toggleWelfare}
-          className={`flex min-h-8 items-center rounded-full border px-2.5 text-[11px] transition-colors ${
+          className={`flex min-h-10 items-center rounded-full border px-3 text-xs transition-colors ${
             value.welfareOnly
               ? "border-zinc-300 bg-zinc-100 font-medium text-zinc-900"
               : "border-zinc-200 bg-white text-zinc-500"
@@ -196,7 +196,7 @@ export default function ShelterFilterBar({
           className="group relative ml-auto"
         >
           <summary
-            className={`flex min-h-8 cursor-pointer list-none items-center rounded-full border px-2.5 text-[11px] marker:content-none ${
+            className={`flex min-h-10 cursor-pointer list-none items-center rounded-full border px-3 text-xs marker:content-none ${
               chosen.length > 0
                 ? "border-zinc-900 bg-zinc-900 font-medium text-white"
                 : "border-zinc-200 text-zinc-500"
@@ -205,7 +205,7 @@ export default function ShelterFilterBar({
             {summaryLabel} ▾
           </summary>
 
-          <div className="absolute right-0 z-20 mt-1 w-60 rounded-lg border border-zinc-200 bg-white p-2 shadow-lg">
+          <div className="absolute right-0 z-20 mt-1 w-72 rounded-lg border border-zinc-200 bg-white p-2 shadow-lg">
             <div className="flex flex-wrap gap-1">
               {/*
                 **選んでも閉じない。** 複数選ぶ前提なので、1つ押すたびに閉じると
@@ -229,7 +229,7 @@ export default function ShelterFilterBar({
               ))}
             </div>
 
-            <div className="mt-2 border-t border-zinc-100 pt-2 text-[11px] leading-snug text-zinc-500">
+            <div className="mt-2 border-t border-zinc-100 pt-2 text-xs leading-snug text-zinc-500">
               {/*
                 **どこに効くのかは、押す前に言う。** 効かない画面（災害別の表）の
                 上に断り書きを常設するより、操作する場所で先に言うほうが早い。
@@ -268,7 +268,7 @@ export default function ShelterFilterBar({
         出してはいけない側の案内になる。ここは字数を惜しまない。
       */}
       {value.welfareOnly && (
-        <p className="px-3 pb-1.5 text-[11px] leading-relaxed text-zinc-600">
+        <p className="px-4 pb-2 text-xs leading-relaxed text-zinc-600">
           受入対象者の定めがある指定避難所です。
           <strong className="font-medium text-zinc-900">
             開設するかは市町村が判断し、対象者も定められています。
@@ -278,7 +278,7 @@ export default function ShelterFilterBar({
       )}
 
       {hint > 0 && (
-        <p role="status" className="px-3 pb-1.5 text-[11px] text-zinc-600">
+        <p role="status" className="px-4 pb-2 text-xs text-zinc-600">
           {KINDS.map((k) => k.shortLabel).join("・")}
           のどちらかは地図に出します。
         </p>
@@ -304,7 +304,7 @@ function DisasterChip({
       aria-pressed={selected}
       title={title}
       onClick={onClick}
-      className={`min-h-8 shrink-0 rounded-full border px-2.5 text-[11px] whitespace-nowrap transition-colors ${
+      className={`min-h-10 shrink-0 rounded-full border px-3 text-xs whitespace-nowrap transition-colors ${
         selected
           ? "border-zinc-900 bg-zinc-900 font-medium text-white"
           : "border-zinc-200 bg-white text-zinc-600"
