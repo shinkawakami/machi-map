@@ -115,24 +115,6 @@ export default function ShelterDetailView({
             {detail.address}
           </p>
         )}
-        {/*
-          **調べた先と、実際に行くことのあいだを埋める。**
-          このアプリが出せるのは直線距離までで、川や崖を挟んでいても短く出る。
-          そこから先（どの道を通るか）は地図アプリの仕事なので、渡してしまう。
-
-          外部の地図サービスへ**座標を渡して開くだけ**のリンクで、API も鍵も使わない
-          （住所検索で外部 API を避けたのは規約の判断が戻ってくるためで、
-          この種のリンクはその話とは別）。徒歩を指定するのは、緊急避難場所へ
-          向かう手段が原則として徒歩だから。
-        */}
-        <a
-          href={`https://www.google.com/maps/dir/?api=1&destination=${detail.lat},${detail.lng}&travelmode=walking`}
-          target="_blank"
-          rel="noreferrer"
-          className="mt-2 inline-flex min-h-10 items-center rounded-full border border-zinc-300 px-4 text-sm font-medium text-zinc-800 transition-colors hover:bg-zinc-50"
-        >
-          徒歩の経路を見る（Google マップ）↗
-        </a>
         {/* 畳んだ1行が自分で名乗るので、そのときはこの断りは要らない。 */}
         {full.length > 1 && (
           <p className="mt-1 text-sm leading-relaxed text-zinc-600">
@@ -158,6 +140,36 @@ export default function ShelterDetailView({
           />
         );
       })}
+
+      {/*
+        **調べた先と、実際に行くことのあいだを埋める。**
+        このアプリが出せるのは直線距離までで、川や崖を挟んでいても短く出る。
+        そこから先（どの道を通るか）は地図アプリの仕事なので、渡してしまう。
+
+        外部の地図サービスへ**座標を渡して開くだけ**のリンクで、API も鍵も使わない
+        （住所検索で外部 API を避けたのは規約の判断が戻ってくるためで、
+        この種のリンクはその話とは別）。**徒歩を指定するのは、緊急避難場所へ
+        向かう手段が原則として徒歩だから**。文言から落とせないのはここと
+        「（Google マップ）」で、アプリの外へ出る先は名乗ってから飛ばす。
+        削れたのは「を見る」だけ（リンクなら自明）。それで 286px → 244px。
+
+        **置き場所は指定のブロックより下。** 以前は名前と住所のすぐ下にあり、
+        「どうやって行くか」が「この災害で使えるか」（○/×）より上に来ていた。
+        地図アプリの施設カードは経路ボタンが上にあるが、**あちらは行き先が
+        もう決まっている前提**で、こちらは行き先を決めるための画面なので順序が違う。
+        指定避難所のように ○/× を持たないものでは、結果的に同じ位置に来る。
+
+        flex の子なので display は block 化される。self-start を付けないと
+        柱の幅いっぱいに伸びる。
+      */}
+      <a
+        href={`https://www.google.com/maps/dir/?api=1&destination=${detail.lat},${detail.lng}&travelmode=walking`}
+        target="_blank"
+        rel="noreferrer"
+        className="inline-flex min-h-10 items-center self-start rounded-full border border-zinc-300 px-4 text-sm font-medium text-zinc-800 transition-colors hover:bg-zinc-50"
+      >
+        徒歩の経路（Google マップ）↗
+      </a>
 
       {/*
         名前まで一致する指定は上で中身ごと出しているので、そのときは言わない。
