@@ -1,14 +1,48 @@
 @import "tailwindcss";
 
-@theme inline {
-  --font-sans: var(--font-geist-sans), "Hiragino Sans", "Noto Sans JP",
-    "Yu Gothic UI", system-ui, sans-serif;
+/*
+ * 本文は端末のフォントで出す。**日本語の Web フォントは落とさない。**
+ * Noto Sans JP のフルセットは数 MB あり、細い回線で開かれることを考えると、
+ * 見た目のために払う額ではない。
+ *
+ * **Geist（latin のみ）を被せるのをやめた。** かな・漢字はどのみち端末のフォントに
+ * 落ちるので、英数字だけが Geist・日本語はヒラギノという混植になり、
+ * 字面率もベースラインも揃わない。距離の数字と施設名が1行に並ぶ画面なので、
+ * 揃っていないことが一覧のあちこちで出る。OS の既定に素直に従うほうを取る。
+ *
+ * system-ui は macOS/iOS で San Francisco、Windows で Yu Gothic UI に解決する。
+ * San Francisco はかなを持たないので、**続けてヒラギノを置いて日本語だけを拾わせる**。
+ * この並び自体は日本語の Web でいちばん使われている形。
+ */
+@theme {
+  --font-sans: system-ui, -apple-system, "Hiragino Sans",
+    "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic UI", Meiryo,
+    sans-serif;
 }
 
 body {
   background: #ffffff;
   color: #18181b;
   font-family: var(--font-sans);
+}
+
+/*
+ * キーボードで操作している人に、いまどこに居るかを返す。
+ * 的の大きさは整えてあったが、焦点の輪はブラウザ既定任せだった。
+ *
+ * **白と黒の二重の輪にする。** 単色だと、どちらかの地の上で消える。
+ * 黒一色は zinc-900 の上（「送る・紙に出す」と Undo の帯）で見えず、
+ * 白一色は白いパネルの上で見えない。内側に白・外側に黒を置けば、
+ * どちらの地でも片方が残る。
+ *
+ * **:where() で包んであるので詳細度は 0。** focus:outline-none を自分で置いて
+ * あるところ（Modal と IntroCard のカード。焦点を受け取るだけの器で、
+ * 輪を出す相手ではない）はそのまま勝って、輪が出ない。
+ */
+:where(a, button, summary, input, select, textarea):focus-visible {
+  outline: 2px solid #18181b;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px #ffffff;
 }
 
 /*

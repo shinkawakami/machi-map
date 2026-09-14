@@ -29,7 +29,8 @@ const FOOT = "wagaya-nigesaki.vercel.app ／ 出典：国土地理院";
  * 素の `Mozilla/5.0` を送ると truetype が返る。
  *
  * 取得はビルド時に1回だけ走る（このページは静的に生成される）。
- * next/font/google で Geist を落としているのと同じく、ビルドに外部取得が入る形。
+ * 画面側は端末のフォントで出すので Web フォントを落とさないが、こちらは
+ * ラスタ画像で、字形を埋め込まないと字が出ない。ここだけは取りに行く。
  */
 async function notoSansJp(weight: 400 | 700, text: string): Promise<ArrayBuffer> {
   const cssUrl = `https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@${weight}&text=${encodeURIComponent(text)}`;

@@ -132,7 +132,7 @@ export default function AddressSearch({
         aria-controls={visible.length > 0 ? listId : undefined}
         aria-autocomplete="list"
         aria-activedescendant={active >= 0 ? `${listId}-${active}` : undefined}
-        className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-base text-zinc-900 placeholder:text-zinc-500 focus:border-zinc-400 focus:ring-2 focus:ring-zinc-900/10 focus:outline-none"
+        className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-base text-zinc-900 placeholder:text-zinc-500 focus:border-zinc-400 focus:ring-2 focus:ring-zinc-900/10"
       />
 
       {failed && (

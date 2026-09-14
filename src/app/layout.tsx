@@ -1,11 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist } from "next/font/google";
 import "./globals.css";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
 
 const TITLE = "わが家の逃げ先 | 拠点ごとに、災害の種類で変わる避難場所";
 const DESCRIPTION =
@@ -33,11 +27,19 @@ export const viewport: Viewport = {
   // 地図をピンチで拡大する場面があるので、拡大自体は禁止しない。
   width: "device-width",
   initialScale: 1,
+  /*
+    **この画面は明色しか持たない、と名乗る。** 配色は白地の一本で、
+    dark: の指定はどこにも無い。名乗らないと、OS が暗色のときにブラウザが
+    入力欄・スクロールバー・既定の文字色だけを暗くしにかかり、
+    地図と白いパネルの上にそこだけ暗い部品が乗る。
+    暗色に対応するならこの行を消して、globals.css から作り直すこと。
+  */
+  colorScheme: "light",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="ja" className={`${geistSans.variable} h-full antialiased`}>
+    <html lang="ja" className="h-full antialiased">
       {/* 地図が画面いっぱいに広がるので、ページ自体はスクロールさせない。 */}
       <body className="flex h-dvh flex-col overflow-hidden">{children}</body>
     </html>
