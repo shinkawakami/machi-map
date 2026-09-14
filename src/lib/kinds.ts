@@ -5,6 +5,13 @@ type KindMeta = {
   label: string;
   /** 狭い場所（フィルタのボタンなど）で使う短い名前 */
   shortLabel: string;
+  /**
+   * 役割を1行に収める場所で使う最短形（地図の凡例）。
+   *
+   * description は2つ並べると4行になり、地図に常設できる大きさではない。
+   * **落とすのは修飾で、対比は落とさない**（「まず」と「あとで」で時系列が残る）。
+   */
+  shortDescription: string;
   color: string;
   description: string;
 };
@@ -24,6 +31,7 @@ export const KINDS = [
     key: "EMERGENCY",
     label: "指定緊急避難場所",
     shortLabel: "緊急避難場所",
+    shortDescription: "まず逃げこむ",
     color: "#ea580c",
     description: "災害の危険から命を守るために、緊急的に逃げ込む場所",
   },
@@ -31,6 +39,7 @@ export const KINDS = [
     key: "SHELTER",
     label: "指定避難所",
     shortLabel: "避難所",
+    shortDescription: "あとで生活する",
     color: "#1d4ed8",
     description: "自宅に戻れなくなった人が、一定期間 生活する施設",
   },

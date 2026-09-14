@@ -18,6 +18,7 @@ import {
 } from "@/features/map/interactions";
 import LocateButton from "@/features/map/LocateButton";
 import MapChips from "@/features/map/MapChips";
+import MapLegend from "@/features/map/MapLegend";
 import {
   addShelterLayers,
   MAP_STYLE,
@@ -437,6 +438,11 @@ export default function ShelterMap() {
       */}
       <div className="pointer-events-none absolute inset-x-0 top-0 flex flex-col items-start gap-2 p-3 md:pl-[21rem] lg:pl-[25rem]">
         <MapChips status={status} filter={filter} />
+        {/*
+          凡例は状態チップの下。**状態は変わるが凡例は変わらない**ので、
+          動くもののほうを上（目に入る位置）に置く。
+        */}
+        <MapLegend />
       </div>
 
       <LocateButton onClick={geo.locate} locating={geo.locating} />
