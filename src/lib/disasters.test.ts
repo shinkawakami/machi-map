@@ -5,6 +5,7 @@ import {
   DISASTER_TYPES,
   type DisasterKey,
   disasterLabel,
+  disasterSummary,
   encodeDisasters,
   isDisasterKey,
   parseDisasters,
@@ -111,5 +112,47 @@ describe("isDisasterKey / disasterLabel", () => {
       expect(disasterLabel(d.key)).toBe(d.label);
       expect(disasterLabel(d.key)).not.toBe("");
     }
+  });
+});
+
+describe("disasterSummary", () => {
+  test("3種までは、そのまま並べる（実データの 55.3%）", () => {
+    expect(disasterSummary(["flood"])).toBe("洪水");
+    expect(disasterSummary(["flood", "landslide"])).toBe("洪水・土砂災害");
+    expect(disasterSummary(["flood", "landslide", "stormSurge"])).toBe(
+      "洪水・土砂災害・高潮",
+    );
+  });
+
+  test("4種以上は、先頭2つと残りの数にする", () => {
+    expect(
+      disasterSummary(["flood", "landslide", "stormSurge", "earthquake"]),
+    ).toBe("洪水・土砂災害 ほか2種");
+  });
+
+  test("8種すべてのときは数えさせない", () => {
+    expect(disasterSummary(DISASTER_TYPES.map((d) => d.key))).toBe("8種すべて");
+  });
+
+  /**
+   * ここが目的。副題は 13px・幅 288px の truncate でおよそ22字しか出ず、
+   * 切れると落ちた災害が読めないまま先頭だけが残る。**どう選んでも切れないこと**を
+   * 押さえておく（全 255 通りを総当たりする）。
+   */
+  test("どの組み合わせでも、1行に収まる長さ（22字以下）で返す", () => {
+    const keys = DISASTER_TYPES.map((d) => d.key);
+    let longest = "";
+
+    for (let mask = 1; mask < 1 << keys.length; mask++) {
+      const chosen = keys.filter((_, i) => mask & (1 << i));
+      const text = disasterSummary(chosen);
+      if (text.length > longest.length) longest = text;
+    }
+
+    expect(longest.length).toBeLessThanOrEqual(22);
+  });
+
+  test("0種は起きない想定だが、空文字を返さない", () => {
+    expect(disasterSummary([])).toBe("対応する災害の指定なし");
   });
 });

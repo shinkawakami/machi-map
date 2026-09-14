@@ -6,7 +6,7 @@ import { api } from "@/client/api";
 import { useResource } from "@/client/use-resource";
 import { InlineDetail } from "@/features/panel/DetailPane";
 import { Message } from "@/features/panel/parts";
-import { disasterLabel } from "@/lib/disasters";
+import { disasterSummary } from "@/lib/disasters";
 import type { ShelterFilter } from "@/lib/filter";
 import { formatDistance } from "@/lib/format";
 import type { LatLng } from "@/lib/geo";
@@ -99,10 +99,16 @@ export default function NearbyList({
                   {formatDistance(item.distanceM)}
                 </span>
               </span>
+              {/*
+                **全部並べない。** 列挙は実測で 20.8% が truncate に掛かり、
+                切れると落ちた災害が読めないまま先頭だけが答えの顔をする。
+                畳み方は src/lib/disasters.ts の disasterSummary（どの組み合わせでも
+                1行に収まることをテストで押さえてある）。全部見たいときは行を開く。
+              */}
               <span className="mt-0.5 block truncate text-[13px] text-zinc-500">
                 {item.disasters === null
                   ? "災害種別の指定なし"
-                  : item.disasters.map((d) => disasterLabel(d)).join("・")}
+                  : disasterSummary(item.disasters)}
               </span>
             </button>
             {item.id === openId && <InlineDetail id={item.id} nameShown />}
