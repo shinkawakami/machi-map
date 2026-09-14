@@ -26,9 +26,20 @@ import type { PlaceDetail, ShelterDetail } from "@/lib/shelter";
  * 87.5%（72,879 件）が受入対象者・その他・備考のどれも持たない。畳まないと、
  * それらの場所では「見出し＋役割の説明＋災害種別の指定がありません」という
  * **どこを開いても一字一句同じ4行**が、8種の表の下に必ず付く。
- * 役割の説明そのものは畳んでも消さない（「逃げ込む場所」と「生活する施設」の対比は
- * 主張2そのもので、曖昧にするとこのアプリの存在理由が消える）。
- * 指定緊急避難場所は固有情報が無くても**8種の ○/×** が場所ごとに違うので、畳まない。
+ * 指定緊急避難場所は固有情報が無くても**8種の ○/× が場所ごとに違う**ので、畳まない
+ * （組み合わせは実測で 235 通り、最多のパターンでも 7.4% しかない）。
+ *
+ * **定型文は、一覧・表の中で開いたときには出さない（inline）。**
+ * 役割の説明も「災害種別の指定がありません」も、種別が同じなら全件で同じ文章。
+ * 87.5% の指定避難所では、**開いて増える場所固有の事実は住所と経路リンクの2つだけ**で、
+ * 残りは定型文だった（災害別の表から開いた場合は、住所も行に出ているので経路リンクだけ）。
+ * 定型文4行の下にそれを置く形になっていて、開く値打ちを自分で消していた。
+ *
+ * **消したのではなく、文脈が無いところに寄せた。** 主張2（緊急避難場所と避難所は別物）は
+ * 初回カード（IntroCard。ヘッダの「？」でいつでも戻せる）と、災害別の表の
+ * 「災害がおさまったあと、生活する場所（指定避難所）」の見出しが担う。
+ * **地図の点から直接開いたときだけは残す**（そこには周りの文脈が何も無いので、
+ * 種別の名前だけ出しても「別物」が伝わらない）。
  *
  * 災害種別は**8種すべて**を出し、対応していないものにも×を付ける。
  * 対応するものだけ並べると「書いていない災害はどうなのか」が読み取れず、
@@ -36,34 +47,58 @@ import type { PlaceDetail, ShelterDetail } from "@/lib/shelter";
  */
 export default function ShelterDetailView({
   detail,
+  inline = false,
+  omitName = false,
+  omitAddress = false,
 }: {
   detail: PlaceDetail;
+  /**
+   * 一覧・表の行の中に出しているか。周りに文脈があるので、全件で同じ文章
+   * （役割の説明・災害種別の指定がありません）は出さない。
+   */
+  inline?: boolean;
+  /** 上の行がすでに施設名を見出しに出しているとき（DetailPane の InlineDetail） */
+  omitName?: boolean;
+  /** 上の行がすでに住所を出しているとき */
+  omitAddress?: boolean;
 }) {
   const blocks = toBlocks([detail, ...detail.others]);
   const full = blocks.filter((block) => !isCompact(block, blocks.length));
-  // バッジは「どの種別があるか」。ブロックは災害種別が食い違うと分かれるので、
-  // そのまま並べると同じ種別のバッジが2つ出る。
-  const kinds = [...new Set(blocks.map((b) => b.kind))];
   const otherKind = KINDS.find((k) => k.key !== detail.kind)!;
 
   return (
     <div className="flex flex-col gap-3 text-sm">
       <div>
-        <span className="flex flex-wrap items-center gap-1">
-          {kinds.map((kind) => (
-            <span
-              key={kind}
-              className="inline-block rounded-full px-2 py-0.5 text-xs text-white"
-              style={{ backgroundColor: kindOf(kind).color }}
-            >
-              {kindOf(kind).label}
-            </span>
-          ))}
-        </span>
-        <h2 className="mt-1 text-base leading-snug font-semibold text-zinc-900">
-          {detail.name}
-        </h2>
-        <p className="mt-0.5 text-[13px] text-zinc-500">{detail.address}</p>
+        {/*
+          **種別の名乗りは1回にする。** 指定が複数あるときは下のブロックが
+          それぞれ見出しで名乗るので（Designation の labelled と、
+          CompactDesignation の「〇〇でもあります。」）、ここにも出すと
+          同じ語が2回ずつ並ぶ。あいだに「複数の指定があります」の1文も挟まるので、
+          **同じ事実が3通りの言い方で出ていた。**
+
+          指定が1つのときは下に見出しが出ない（labelled が false）ので、
+          **ここが唯一の名乗り**になる。出す条件をそれと同じにする。
+        */}
+        {blocks.length === 1 && (
+          <span
+            className="inline-block rounded-full px-2 py-0.5 text-xs text-white"
+            style={{ backgroundColor: kindOf(blocks[0].kind).color }}
+          >
+            {kindOf(blocks[0].kind).label}
+          </span>
+        )}
+        {!omitName && (
+          <h2 className="mt-1 text-base leading-snug font-semibold text-zinc-900">
+            {detail.name}
+          </h2>
+        )}
+        {!omitAddress && (
+          <p
+            className={`text-[13px] text-zinc-500 ${omitName ? "mt-1" : "mt-0.5"}`}
+          >
+            {detail.address}
+          </p>
+        )}
         {/*
           **調べた先と、実際に行くことのあいだを埋める。**
           このアプリが出せるのは直線距離までで、川や崖を挟んでいても短く出る。
@@ -97,9 +132,14 @@ export default function ShelterDetailView({
       {blocks.map((block) => {
         const key = `${block.kind}/${block.disasters?.join("+") ?? ""}`;
         return isCompact(block, blocks.length) ? (
-          <CompactDesignation key={key} block={block} />
+          <CompactDesignation key={key} block={block} inline={inline} />
         ) : (
-          <Designation key={key} block={block} labelled={blocks.length > 1} />
+          <Designation
+            key={key}
+            block={block}
+            labelled={blocks.length > 1}
+            inline={inline}
+          />
         );
       })}
 
@@ -181,7 +221,13 @@ function isCompact(block: Block, blockCount: number): boolean {
 }
 
 /** 場所ごとの中身が無いブロック。名乗りと役割だけを1行で置く。 */
-function CompactDesignation({ block }: { block: Block }) {
+function CompactDesignation({
+  block,
+  inline,
+}: {
+  block: Block;
+  inline: boolean;
+}) {
   const kind = kindOf(block.kind);
 
   return (
@@ -194,7 +240,8 @@ function CompactDesignation({ block }: { block: Block }) {
         <strong className="font-semibold text-zinc-900">
           {kind.label}でもあります。
         </strong>
-        {kind.description}。災害種別の指定はありません。
+        {/* 後半は種別が同じなら全件で同じ文章。文脈がある場所では出さない。 */}
+        {!inline && `${kind.description}。災害種別の指定はありません。`}
       </p>
     </div>
   );
@@ -204,12 +251,26 @@ function CompactDesignation({ block }: { block: Block }) {
 function Designation({
   block,
   labelled,
+  inline,
 }: {
   block: Block;
   /** 同じ場所に複数のブロックがあるか。1つだけなら見出しは要らない */
   labelled: boolean;
+  inline: boolean;
 }) {
   const kind = kindOf(block.kind);
+  const hasFields =
+    block.targetPersons.length > 0 ||
+    block.otherMatters.length > 0 ||
+    block.note.length > 0;
+  /*
+    ○/× は場所ごとに違う（235 通り）ので常に出す。指定避難所の「指定がありません」は
+    全件で同じ文章なので、周りに文脈がある一覧・表の中では出さない。
+  */
+  const showDisasters = block.disasters !== null || !inline;
+
+  // 定型文を落とした結果、出すものが何も残らないことがある。空の枠は置かない。
+  if (!labelled && inline && !showDisasters && !hasFields) return null;
 
   return (
     <div className={labelled ? "border-t border-zinc-100 pt-2.5" : ""}>
@@ -222,38 +283,42 @@ function Designation({
           {kind.label}
         </h3>
       )}
-      <p className={`text-sm text-zinc-600 ${labelled ? "mt-0.5" : ""}`}>
-        {kind.description}
-      </p>
+      {!inline && (
+        <p className={`text-sm text-zinc-600 ${labelled ? "mt-0.5" : ""}`}>
+          {kind.description}
+        </p>
+      )}
 
-      <section className="mt-2">
-        <h4 className="text-xs font-semibold text-zinc-500">対応する災害</h4>
-        {block.disasters === null ? (
-          <p className="mt-1 text-sm leading-relaxed text-zinc-600">
-            指定避難所には災害種別の指定がありません。
-            災害の種類ごとに使える・使えないが分かれるのは指定緊急避難場所のほうです。
-          </p>
-        ) : (
-          <ul className="mt-1.5 flex flex-wrap gap-1">
-            {DISASTER_TYPES.map((disaster) => {
-              const on = block.disasters!.includes(disaster.key);
-              return (
-                <li
-                  key={disaster.key}
-                  title={disaster.sourceLabel}
-                  className={`rounded border px-2 py-1 text-xs ${
-                    on
-                      ? "border-emerald-200 bg-emerald-50 text-emerald-900"
-                      : "border-zinc-200 bg-zinc-50 text-zinc-500"
-                  }`}
-                >
-                  {on ? "○" : "×"} {disaster.label}
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
+      {showDisasters && (
+        <section className="mt-2">
+          <h4 className="text-xs font-semibold text-zinc-500">対応する災害</h4>
+          {block.disasters === null ? (
+            <p className="mt-1 text-sm leading-relaxed text-zinc-600">
+              指定避難所には災害種別の指定がありません。
+              災害の種類ごとに使える・使えないが分かれるのは指定緊急避難場所のほうです。
+            </p>
+          ) : (
+            <ul className="mt-1.5 flex flex-wrap gap-1">
+              {DISASTER_TYPES.map((disaster) => {
+                const on = block.disasters!.includes(disaster.key);
+                return (
+                  <li
+                    key={disaster.key}
+                    title={disaster.sourceLabel}
+                    className={`rounded border px-2 py-1 text-xs ${
+                      on
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+                        : "border-zinc-200 bg-zinc-50 text-zinc-500"
+                    }`}
+                  >
+                    {on ? "○" : "×"} {disaster.label}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+      )}
 
       <Field label="受入対象者" values={block.targetPersons} />
       <Field

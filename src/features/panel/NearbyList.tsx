@@ -105,7 +105,7 @@ export default function NearbyList({
                   : item.disasters.map((d) => disasterLabel(d)).join("・")}
               </span>
             </button>
-            {item.id === openId && <InlineDetail id={item.id} />}
+            {item.id === openId && <InlineDetail id={item.id} nameShown />}
           </li>
         ))}
       </ul>

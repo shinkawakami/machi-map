@@ -210,7 +210,7 @@ function SummaryGroupView({
             : item.address}
         </span>
       </button>
-      {open && <InlineDetail id={item.id} />}
+      {open && <InlineDetail id={item.id} nameShown={!far} addressShown={!far} />}
     </>
   );
 }
