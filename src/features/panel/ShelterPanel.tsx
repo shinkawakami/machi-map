@@ -38,11 +38,8 @@ export type PanelView =
   | { state: "list" }
   | { state: "detail"; id: string; from: "summary" | "list" };
 
-const TITLES = {
-  /** 起点がまだ無いとき */
-  start: "場所を決める",
-  detail: "施設の詳細",
-} as const;
+/** 畳んだときの見出し。起点がまだ無いとき用（あれば起点の名前を出す） */
+const START_TITLE = "場所を決める";
 
 export default function ShelterPanel({
   view,
@@ -178,7 +175,7 @@ export default function ShelterPanel({
             className="flex w-full items-center gap-2 py-1.5 text-left"
           >
             <span className="min-w-0 flex-1 truncate text-sm font-semibold text-zinc-700">
-              {origin ? originLabel(origin) : TITLES.start}
+              {origin ? originLabel(origin) : START_TITLE}
             </span>
             <span className="shrink-0 text-xs text-zinc-500">開く</span>
           </button>
@@ -281,27 +278,6 @@ export default function ShelterPanel({
       )}
 
       {/*
-        起点の名前だけの行は持たない。拠点なら上の★が光っているし、
-        地図にはピンが立っていて、どこの話かはそれで足りる。
-        1行まるごと使うほどの情報ではなかった。
-      */}
-      {view.state === "detail" && !collapsed && (
-        <div className="flex shrink-0 items-center gap-2 border-b border-zinc-100 px-4 py-1">
-          <button
-            type="button"
-            onClick={() => onShow(view.from)}
-            className="-ml-2 flex min-h-10 items-center rounded px-2 text-sm text-zinc-500 hover:text-zinc-900"
-          >
-            {/* 起点がまだ無いときの戻り先は表でも一覧でもなく、場所を決める案内。 */}
-            ← {!origin ? "戻る" : view.from === "summary" ? "表" : "一覧"}
-          </button>
-          <h2 className="text-sm font-semibold text-zinc-700">
-            {TITLES.detail}
-          </h2>
-        </div>
-      )}
-
-      {/*
         **見方の切り替えと絞り込みは、1行を分け合う。**
         もとは別々の行で、合わせて 156px（下のシートの 42%）を固定で使っていた。
         住所の欄・拠点の★・下段の保存/送るを足すと、iPhone SE 相当では
@@ -312,21 +288,47 @@ export default function ShelterPanel({
         どちらかに片寄せると片方が行き止まりになるので、両方を出し続ける。
         起点がまだ無いあいだは出す中身が無いので、絞り込みだけが残る
         （絞り込みは起点と関係なく地図に効くので、こちらは常に置く）。
+
+        **詳細を見ているあいだは、この左半分が戻り口になる。** もとは「← 一覧」と
+        「施設の詳細」の行を上に足していたが、**その行は右半分が空で、絞り込みの行は
+        左半分が空**だった。埋め合う形だったので1行にまとめる（狭い画面で 48px 戻る）。
+        ついでに**見出しの「施設の詳細」も捨てた。** すぐ下に施設名が見出しで
+        出ているので、同じ場所を2回名乗っていた（行の中で開いた詳細から名前を
+        落としたのと同じ話。DetailPane）。起点の名前だけの行を持たないのも同じ理由で、
+        拠点なら上の★が光っているし、地図にはピンが立っている。
+
+        **戻り口そのものは残す。** 地図の点から開くのが詳細へ入る唯一の道で、
+        タブはこのとき出ていない。← を消すと、地図を押して起点を動かす以外に
+        表や一覧へ返る道が無くなる。
       */}
       {!collapsed && (
         <ShelterFilterBar value={filter} onChange={onChangeFilter}>
-          {reading && (
-            <>
-              <Tab
-                active={view.state === "summary"}
-                onClick={() => onShow("summary")}
-              >
-                災害別
-              </Tab>
-              <Tab active={view.state === "list"} onClick={() => onShow("list")}>
-                近い順
-              </Tab>
-            </>
+          {view.state === "detail" ? (
+            <button
+              type="button"
+              onClick={() => onShow(view.from)}
+              className="-ml-2 flex min-h-10 items-center rounded px-2 text-sm text-zinc-500 hover:text-zinc-900"
+            >
+              {/* 起点がまだ無いときの戻り先は表でも一覧でもなく、場所を決める案内。 */}
+              ← {!origin ? "戻る" : view.from === "summary" ? "表" : "一覧"}
+            </button>
+          ) : (
+            reading && (
+              <>
+                <Tab
+                  active={view.state === "summary"}
+                  onClick={() => onShow("summary")}
+                >
+                  災害別
+                </Tab>
+                <Tab
+                  active={view.state === "list"}
+                  onClick={() => onShow("list")}
+                >
+                  近い順
+                </Tab>
+              </>
+            )
           )}
         </ShelterFilterBar>
       )}
