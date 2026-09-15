@@ -153,6 +153,19 @@ export default function ShelterDetailView({
         「（Google マップ）」で、アプリの外へ出る先は名乗ってから飛ばす。
         削れたのは「を見る」だけ（リンクなら自明）。それで 286px → 244px。
 
+        **外へ出る印は、末尾の「↗」から先頭のピンに移した。** 「↗」は文字なので
+        読み上げに乗り（「北東向き矢印」などと読まれる）、伝える中身は
+        すでに書いてある「（Google マップ）」と同じだった。代わりに地図の
+        ピンを置く。**このボタンだけが外部の地図サービスに渡す出口**で、
+        文字だけの丸ボタンだと他の操作と見分けが付かない。ピンは地図アプリ
+        共通の形で、色は他と同じ Tailwind の red-600。
+        **Google のロゴそのものは使わない**（商標。Google の利用規定は
+        「承認された素材だけを使う」「製品アイコンや配色の見た目を写さない」と
+        明記していて、自前で描き起こすのはそこに当たる。ロゴ素材が配られるのは
+        Maps Platform を使う場合で、このアプリは API も鍵も使っていない）。
+        Google マップだと分かるのは文字の側の仕事にして、ピンは
+        「地図アプリへ出る」ことだけを言う。aria-hidden で読み上げには乗せない。
+
         **置き場所は指定のブロックより下。** 以前は名前と住所のすぐ下にあり、
         「どうやって行くか」が「この災害で使えるか」（○/×）より上に来ていた。
         地図アプリの施設カードは経路ボタンが上にあるが、**あちらは行き先が
@@ -166,9 +179,10 @@ export default function ShelterDetailView({
         href={`https://www.google.com/maps/dir/?api=1&destination=${detail.lat},${detail.lng}&travelmode=walking`}
         target="_blank"
         rel="noreferrer"
-        className="inline-flex min-h-10 items-center self-start rounded-full border border-zinc-300 px-4 text-sm font-medium text-zinc-800 transition-colors hover:bg-zinc-50"
+        className="inline-flex min-h-10 items-center gap-1.5 self-start rounded-full border border-zinc-300 py-2 pr-4 pl-3 text-sm font-medium text-zinc-800 transition-colors hover:bg-zinc-50"
       >
-        徒歩の経路（Google マップ）↗
+        <MapPinIcon />
+        徒歩の経路（Google マップ）
       </a>
 
       {/*
@@ -230,6 +244,24 @@ export default function ShelterDetailView({
         最新かつ詳細な情報は、必ず市町村にご確認ください。
       </p>
     </div>
+  );
+}
+
+/**
+ * 地図アプリへ出ることを示すピン。しずく型に穴は、どの地図アプリでも同じ形。
+ * 色は他と同じ Tailwind の red-600 で、ロゴの描き起こしはしない。
+ */
+function MapPinIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="#dc2626"
+      aria-hidden="true"
+    >
+      <path d="M12 2c-3.9 0-7 3.1-7 7 0 5.2 7 13 7 13s7-7.8 7-13c0-3.9-3.1-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z" />
+    </svg>
   );
 }
 
