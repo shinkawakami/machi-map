@@ -83,8 +83,12 @@ export default function SummaryTable({
         地図には同じことを最短形で凡例に出してあるが（MapLegend）、あちらは
         地図の点を読むためのもので、こちらは**表の上半分と下半分が別物だ**という
         表の構造そのもの。見る場面が違うので、両方に置く。
+
+        **上を広く、下を狭く。** 上が 10px・下が 12px（行の py-3）で、見出しが
+        自分の名乗る一覧よりも上の区切り線の側に寄っていた。行の余白は指で押せる
+        高さのために動かせないので、上を 16px にして寄せ直す。
       */}
-      <p className="px-4 pt-2.5 text-xs text-zinc-500">
+      <p className="px-4 pt-4 text-xs text-zinc-500">
         災害の危険から、まず逃げこむ場所（{kindOf("EMERGENCY").label}）
       </p>
       {/*
@@ -112,7 +116,7 @@ export default function SummaryTable({
         混ぜると「この災害で使える避難所」と読まれる。
       */}
       <div className="border-t-4 border-zinc-100">
-        <p className="px-4 pt-2.5 text-xs text-zinc-500">
+        <p className="px-4 pt-4 text-xs text-zinc-500">
           災害がおさまったあと、生活する場所（{kindOf("SHELTER").label}）
         </p>
         <SummaryGroupView

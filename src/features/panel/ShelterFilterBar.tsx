@@ -155,7 +155,7 @@ export default function ShelterFilterBar({
 
   return (
     <div className="shrink-0 border-b border-zinc-100">
-      <div className="flex items-center gap-1 px-4 py-1.5">
+      <div className="flex items-center gap-1 px-4 py-1">
         {children}
 
         <details
@@ -164,8 +164,13 @@ export default function ShelterFilterBar({
           onToggle={(event) => setOpen(event.currentTarget.open)}
           className="relative ml-auto"
         >
+          {/*
+            **タブと同じ行にいるので、的の大きさも字も同じにする。** 36px・13px で、
+            隣の 40px・14px より一回り小さかった（items-center なので上下 2px ずつ
+            内側に寄って見える）。押して状態が変わるものは 40px、はこのパネルの基準。
+          */}
           <summary
-            className={`flex min-h-9 cursor-pointer list-none items-center rounded-full border px-3 text-[13px] marker:content-none ${
+            className={`flex min-h-10 cursor-pointer list-none items-center rounded-full border px-3 text-sm marker:content-none ${
               activeCount > 0
                 ? "border-zinc-900 bg-zinc-900 font-medium text-white"
                 : "border-zinc-200 text-zinc-600"
@@ -296,7 +301,7 @@ export default function ShelterFilterBar({
         絞り込んだまま結果だけを読んでいる人には一度も届かない。
       */}
       {value.welfareOnly && (
-        <p className="px-4 pb-2 text-xs leading-relaxed text-zinc-600">
+        <p className="px-4 pt-0.5 pb-2 text-xs leading-relaxed text-zinc-600">
           受入対象者の定めがある指定避難所です。
           <strong className="font-medium text-zinc-900">
             開設するかは市町村が判断し、対象者も定められています。
@@ -306,7 +311,7 @@ export default function ShelterFilterBar({
       )}
 
       {hint > 0 && (
-        <p role="status" className="px-4 pb-2 text-xs text-zinc-600">
+        <p role="status" className="px-4 pt-0.5 pb-2 text-xs text-zinc-600">
           {KINDS.map((k) => k.shortLabel).join("・")}
           のどちらかは地図に出します。
         </p>

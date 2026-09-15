@@ -24,6 +24,13 @@ import type { SameAddressPlace } from "@/lib/shelter";
  *
  * **この部品は枠だけを持つ。** 中身（災害別の表・近い順・詳細・起点がまだ無いときの
  * 案内）はそれぞれ別のファイルにあり、取得も自分で面倒を見る。
+ *
+ * **上に積む操作の帯は、48px で揃える。** ★の行・戻る行・絞り込みの行は、
+ * 中の的がどれも 40px なのに包む余白が 4/6/8px とばらばらで、帯の高さが 48〜56px に
+ * 散っていた。並んで出る帯どうしで段差が見えるし、詳細へ移ってタブが消えるだけで
+ * 絞り込みの行が縮み、下の中身が跳ねていた。**同じ 40px を同じ py-1 で包む。**
+ * いちばん詰まった形（48px）に寄せたのは、パネルの縦が取り合いだから
+ * （絞り込みとタブを1行にまとめたのと同じ話）。
  */
 export type PanelView =
   /** 災害8種ぶんの最寄りをまとめた表。拠点の「持ち帰れるもの」 */
@@ -156,8 +163,13 @@ export default function ShelterPanel({
         住所の検索は**どの画面でも一番上**に置く。地図アプリの検索欄が上にあるのは
         慣習でもあるし、場所を決め直すのに別の画面を経由させる必要がなくなる。
         地図に重ねないのは、操作をパネルに集める整理に合わせたため。
+
+        **広い画面では、天の余白も左右と同じ 16px にする。** 狭い画面は上に
+        つまみ（py-2）が居るので入力欄に上を持たせる必要がないが、`md` では
+        つまみが消える。8px のままだと、柱の天だけが左右の半分になって
+        入力欄がヘッダの線に貼り付いていた。
       */}
-      <div className="shrink-0 border-b border-zinc-100 px-4 pb-2 md:pt-2">
+      <div className="shrink-0 border-b border-zinc-100 px-4 pb-2 md:pt-4">
         {collapsed ? (
           <button
             type="button"
@@ -192,13 +204,14 @@ export default function ShelterPanel({
         パネルの縦は取り合いになっていて（絞り込みとタブを1行にまとめたのと同じ話）、
         拠点を足しただけで中身が 45px 削れる作りは持ちたくない。
 
-        横に流せば**件数に関わらず 57px で固定**できる。上限は5件で名前も短いので、
+        横に流せば**件数に関わらず1行**に収まる。高さは他の帯と同じ 48px
+        （下の区切り線を入れて 49px）で固定できる。上限は5件で名前も短いので、
         外に出るのはせいぜい1つ。Material の scrollable chip set と同じ扱いで、
         端で切れているチップ自体が「まだ続く」の合図になる。
         スクロールバーは消す（出すと行がそのぶん厚くなって、元も子もない）。
       */}
       {!collapsed && places.length > 0 && (
-        <div className="no-scrollbar flex shrink-0 items-center gap-1.5 overflow-x-auto overscroll-x-contain border-b border-zinc-100 px-4 py-2">
+        <div className="no-scrollbar flex shrink-0 items-center gap-1.5 overflow-x-auto overscroll-x-contain border-b border-zinc-100 px-4 py-1">
           {places.map((place) => {
             const current = origin?.name === place.name;
             return (

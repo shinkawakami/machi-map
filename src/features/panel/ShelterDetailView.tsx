@@ -195,9 +195,17 @@ export default function ShelterDetailView({
         「〇〇小学校 グラウンド」のように建物のどこが指定されているかが違うだけの
         ものが大半で、**名前さえ出れば同じ施設かどうかは人が一目で決められる**。
         断りは残すが、判断の材料を先に置いて、打ち消しは添え物に降ろす。
+
+        **網掛けの箱は外した。** 詳細の中でここだけ px-3 の箱に入っていて、
+        名前・住所・○/×・末尾の断りが x=0 から始まる列の中で、**この段落の文字だけが
+        12px 内側**に寄っていた。断り書きであることは、この画面ではすでに別の形で
+        言えている（末尾の注意書きは区切り線＋小さい灰色の字。上の「複数の指定が
+        あります」も地のままの段落）。**箱が効いていたのは地図の点から直接開いたときだけ**で、
+        一覧・表の中で開いたときの地は zinc-50/70 なので、zinc-50 の網掛けは
+        ほとんど出ていなかった。押せる名前の合図は、太字＋下線の側が持っている。
       */}
       {detail.others.length === 0 && detail.sameAddressAsOther && (
-        <p className="rounded bg-zinc-50 px-3 py-2 text-sm leading-relaxed text-zinc-600">
+        <p className="text-sm leading-relaxed text-zinc-600">
           {sameAddress.length > 0 ? (
             <>
               同じ住所に
@@ -240,7 +248,7 @@ export default function ShelterDetailView({
         </p>
       )}
 
-      <p className="border-t border-zinc-100 pt-2 text-xs leading-relaxed text-zinc-500">
+      <p className="border-t border-zinc-100 pt-2.5 text-xs leading-relaxed text-zinc-500">
         最新かつ詳細な情報は、必ず市町村にご確認ください。
       </p>
     </div>
