@@ -51,10 +51,10 @@ export type OriginState = {
    * 詳細を開いて、その点に選択の輪を出す。地図の点を押したときと、
    * 詳細の中の「同じ住所にある指定」を押したときに呼ぶ。
    *
-   * `from` は詳細から戻る先。地図から開いたときは一覧に返すのが自然だが、
-   * **災害別の表から開いた行の中で押されたときは、表に返さないと行き先が変わる。**
+   * 戻り先（詳細の ← の行き先）は**いま見ている面**。詳細から詳細へ移ったときは、
+   * その詳細が持っていた戻り先をそのまま引き継ぐ。
    */
-  openDetail: (id: string, at: LatLng, from?: "summary" | "list") => void;
+  openDetail: (id: string, at: LatLng) => void;
   /** 選択の輪だけ動かす（一覧で行を選んだとき・null で消す） */
   select: (target: LatLng | null) => void;
   /** 押し間違いで移った起点を、見ていた面ごと戻す。戻り先を返す（カメラ用） */
@@ -147,9 +147,19 @@ export function useOrigin(places: Place[]): OriginState {
   }, []);
 
   const openDetail = useCallback(
-    (id: string, at: LatLng, from: "summary" | "list" = "list") => {
+    (id: string, at: LatLng) => {
       setSelected(at);
-      setView({ state: "detail", id, from });
+      /*
+        **戻り先は、いま見ている面。** 既定を「一覧」に決め打ちしていたので、
+        災害別の表を見ている人が地図の点を押して ← で戻ると、押す前と違う面に
+        着いていた（表 → 詳細 → 近い順）。詳細から詳細へ移るとき
+        （同じ住所にある指定）は、元の戻り先をそのまま引き継ぐ。
+      */
+      setView((current) => ({
+        state: "detail",
+        id,
+        from: current.state === "detail" ? current.from : current.state,
+      }));
     },
     [],
   );

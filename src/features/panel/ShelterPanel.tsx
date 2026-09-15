@@ -77,7 +77,7 @@ export default function ShelterPanel({
   onToggleCollapsed: () => void;
   onShow: (state: "summary" | "list") => void;
   /** 別の施設の詳細へ移る（詳細の中の「同じ住所にある指定」から） */
-  onOpenDetail: (id: string, at: LatLng, from: "summary" | "list") => void;
+  onOpenDetail: (id: string, at: LatLng) => void;
   onChangeFilter: (next: ShelterFilter) => void;
   onPickAddress: (hit: GeocodeHit) => void;
   /** 現在地を取る。起点がまだ無いときの案内から直接押せるようにするため */
@@ -117,16 +117,12 @@ export default function ShelterPanel({
   const showShare = places.length > 0;
 
   /*
-    同じ住所にある別の指定へ移る。**戻り先は、いま見ていた面をそのまま残す。**
-    災害別の表の行の中から押されたのに一覧へ返すと、← の行き先が変わってしまう。
-    すでに詳細を見ているときは、その詳細が持っている戻り先を引き継ぐ。
+    同じ住所にある別の指定へ移る。**戻り先は渡さない。** いま見ていた面を残す・
+    詳細からなら元の戻り先を引き継ぐ、はどちらも詳細を開くとき共通の決まりなので、
+    useOrigin の openDetail に1か所だけ置いてある。
   */
   const openSameAddress = (place: SameAddressPlace) =>
-    onOpenDetail(
-      place.id,
-      place,
-      view.state === "detail" ? view.from : view.state,
-    );
+    onOpenDetail(place.id, place);
 
   return (
     /*
