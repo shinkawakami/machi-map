@@ -134,11 +134,18 @@ export default function SummaryTable({
         />
       </div>
 
+      {/*
+        表の断り書き。**「必ず市町村にご確認ください」はここが定位置。**
+        以前は行を開くたびに詳細の末尾に付いていて、区切り線と余白ごと
+        同じ3行が画面に何度も並んでいた。全件で同じ文章なので、
+        画面の終わりに1回だけ置く（ShelterDetailView の inline の扱い）。
+      */}
       <p className="px-4 py-2.5 text-xs leading-relaxed text-zinc-500">
         半径{Math.round(summary.radiusM / 1000)}km まで探しました。
         距離は直線距離で、実際の道のりではありません。
         {explained &&
           `「近くにありません」は、${NEARBY_LIMIT_M / 1000}km 以内に、その災害で使える指定が無いという意味です。`}
+        最新かつ詳細な情報は、必ず市町村にご確認ください。
       </p>
     </>
   );

@@ -123,10 +123,12 @@ export default function NearbyList({
           </li>
         ))}
       </ul>
+      {/* 「必ず市町村にご確認ください」は表と同じくここが定位置（SummaryTable）。 */}
       <p className="px-4 py-2.5 text-xs leading-relaxed text-zinc-500">
         半径{Math.round(result.radiusM / 1000)}km まで探しました
         {result.exhausted && "（これ以上は見つかりませんでした）"}。
         距離は直線距離で、実際の道のりではありません。
+        最新かつ詳細な情報は、必ず市町村にご確認ください。
       </p>
     </>
   );
