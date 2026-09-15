@@ -11,6 +11,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import * as placesStore from "@/client/places-store";
 import { useTimedOffer } from "@/client/use-timed-offer";
+import BasemapControl from "@/features/map/BasemapControl";
+import {
+  currentBasemap,
+  setBasemap,
+  useBasemap,
+} from "@/features/map/basemap-store";
 import { liftAboveSheet, pointFeatures, WIDE_QUERY } from "@/features/map/camera";
 import {
   attachInteractions,
@@ -21,7 +27,8 @@ import MapChips from "@/features/map/MapChips";
 import MapLegend from "@/features/map/MapLegend";
 import {
   addShelterLayers,
-  MAP_STYLE,
+  applyBasemap,
+  mapStyle,
   MAX_BOUNDS,
   SAMPLE_VIEW,
   SELECTED_SOURCE_ID,
@@ -86,12 +93,17 @@ export default function ShelterMap() {
   const [removedPlace, offerUndoRemove] = useTimedOffer<Place>(12_000);
   // 地図に足したソースへ setData できるようになった時点。
   const [mapReady, setMapReady] = useState(false);
-
   /**
    * 保存した拠点。正本は URL、localStorage はその写し。
    * どちらも React の外にあるので、ストアとして読む（src/client/places-store.ts）。
    */
   const { places, offered } = placesStore.usePlaces();
+  /*
+    背景地図。**この端末の保存が正本**なので、拠点と同じく外部ストアとして読む
+    （features/map/basemap-store.ts）。地図を作る effect はストアを直に読む。
+    state 経由にすると、**既定の淡色をタイルごと一度出してから切り替わる**。
+  */
+  const basemap = useBasemap();
   const originState = useOrigin(places);
   const { origin, view, pick, select } = originState;
 
@@ -173,7 +185,7 @@ export default function ShelterMap() {
 
       const map = new Map({
         container: containerRef.current,
-        style: MAP_STYLE,
+        style: mapStyle(currentBasemap()),
         center: SAMPLE_VIEW.center,
         zoom: SAMPLE_VIEW.zoom,
         minZoom: 3,
@@ -248,6 +260,17 @@ export default function ShelterMap() {
     };
     // 地図は一度だけ作る。中で使う最新の値は ref 越しに読む。
   }, []);
+
+  /*
+    背景地図の切り替え。**避難場所のソースとレイヤーには触らない**
+    （表示・非表示だけを動かす。理由は map-style.ts の mapStyle）。
+    初回はすでにその背景で作ってあるので、ここは何も変えない。
+  */
+  useEffect(() => {
+    if (!mapReady) return;
+    const map = mapRef.current;
+    if (map) applyBasemap(map, basemap);
+  }, [mapReady, basemap]);
 
   // 絞り込みか起点が変わったら取り直す。初回は地図の load がまだなので、
   // その場合は createShelterSource 側の初回呼び出しが拾う。
@@ -446,6 +469,7 @@ export default function ShelterMap() {
       </div>
 
       <LocateButton onClick={geo.locate} locating={geo.locating} />
+      <BasemapControl value={basemap} onChange={setBasemap} />
 
       {/*
         引き戻して避難場所が見えなくなったときの案内。

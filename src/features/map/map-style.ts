@@ -11,27 +11,154 @@ import { kindOf } from "@/lib/kinds";
  */
 
 /**
- * 背景地図は地理院タイル（淡色地図）。避難場所の点を載せるので、
- * 情報量の少ない淡色を使う。出典表示は利用規約上の義務なので消さない。
+ * 背景地図は地理院タイル。**出典表示は利用規約上の義務なので消さない。**
+ *
+ * 3種とも同じ「地理院タイル」なので、**種類を変えても出典の文言は変わらない**
+ * （フッタの「背景地図：地理院タイル」も、地図右下の attribution もそのままでよい）。
  */
 const GSI_ATTRIBUTION =
   '<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noreferrer">地理院タイル</a>';
 
-export const MAP_STYLE: StyleSpecification = {
-  version: 8,
-  sources: {
-    gsi: {
-      type: "raster",
-      tiles: ["https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png"],
-      tileSize: 256,
-      minzoom: 2,
-      // 淡色地図の実体は z17 まで。z18 はオーバーズームで引き伸ばす。
-      maxzoom: 17,
-      attribution: GSI_ATTRIBUTION,
-    },
-  },
-  layers: [{ id: "gsi", type: "raster", source: "gsi" }],
+export type BasemapKey = "pale" | "std" | "photo";
+
+type Basemap = {
+  key: BasemapKey;
+  /** 切り替えのボタンと一覧に出す短い名前 */
+  label: string;
+  /**
+   * 一覧で名前に添える1行。**「何が違うか」だけを言う。**
+   * 3つ並ぶので、選ぶ理由が名前から読めないと総当たりになる。
+   */
+  note: string;
+  url: string;
+  /** タイルの実体がある上限。これより上はオーバーズームで引き伸ばす */
+  maxzoom: number;
 };
+
+/**
+ * 選べる背景地図。**淡色を既定にすることは変えない。**
+ *
+ * 避難場所の点は2色（橙と青）＋青いリング＋白縁で、**淡い背景の上で
+ * 見分けることを前提に決めてある**（下の色の節）。淡色以外はその前提が
+ * 弱くなるほうへ動くので、既定ではなく「切り替えて見るもの」として置く。
+ *
+ * それでも3種を出すのは、淡色に無いものがそれぞれにあるため:
+ * 標準は文字が濃く（淡色は地名が読めないという声がいちばん出るところ）、
+ * 写真は建物・川・斜面そのものが見える（指定の場所が実際どんな所かは、
+ * 淡色の四角からは分からない）。
+ */
+export const BASEMAPS = [
+  {
+    key: "pale",
+    label: "淡色",
+    note: "避難場所の点が読みやすい",
+    url: "https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png",
+    // 淡色地図の実体は z17 まで。z18 はオーバーズームで引き伸ばす。
+    maxzoom: 17,
+  },
+  {
+    key: "std",
+    label: "標準",
+    note: "地名や施設名が濃い",
+    url: "https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png",
+    maxzoom: 18,
+  },
+  {
+    key: "photo",
+    label: "写真",
+    note: "建物や川・斜面が見える",
+    url: "https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg",
+    maxzoom: 18,
+  },
+] as const satisfies readonly Basemap[];
+
+export const DEFAULT_BASEMAP: BasemapKey = "pale";
+
+export function basemapOf(key: BasemapKey): (typeof BASEMAPS)[number] {
+  return BASEMAPS.find((b) => b.key === key) ?? BASEMAPS[0];
+}
+
+const basemapSourceId = (key: BasemapKey) => `basemap-${key}`;
+const basemapLayerId = (key: BasemapKey) => `basemap-${key}`;
+
+/**
+ * 写真の上に敷く白。**写真だけ、点の読みやすさが背景しだいで壊れる。**
+ *
+ * 淡色・標準は面が淡いので白縁の点がそのまま浮くが、写真は濃い屋根・影・
+ * 木立の上に青（#1d4ed8）の点が載ると輪郭ごと沈む。かといって点の色や縁を
+ * 背景ごとに変えると、**凡例と地図で色が食い違う**（色の出どころは kinds.ts
+ * ひとつ、という決めごとが崩れる）。**動かすのは背景のほう**にする。
+ *
+ * 0.25 は、写真として何が写っているかは読めるまま、白縁の点が浮く濃さ。
+ */
+const PHOTO_SCRIM_LAYER_ID = "basemap-photo-scrim";
+const PHOTO_SCRIM_OPACITY = 0.25;
+
+/**
+ * 背景地図。**3種ともスタイルに入れておき、表示・非表示だけを切り替える。**
+ *
+ * `setStyle` で差し替える手もあるが、あれはスタイルを丸ごと作り直すので、
+ * こちらで足した避難場所のソースとレイヤー（addShelterLayers）が毎回消える。
+ * 足し直しと setData のやり直しが要るうえ、切り替えのたびに点が一瞬消える。
+ *
+ * 見えていないレイヤーのソースは MapLibre がタイルを取りに行かない
+ * （`TileManager.update` は used でないソースの候補を空にする）。
+ * attribution も used なソースのぶんだけ出るので、置きっぱなしでも
+ * 通信も表示も増えない。
+ */
+export function mapStyle(basemap: BasemapKey): StyleSpecification {
+  return {
+    version: 8,
+    sources: Object.fromEntries(
+      BASEMAPS.map((b) => [
+        basemapSourceId(b.key),
+        {
+          type: "raster",
+          tiles: [b.url],
+          tileSize: 256,
+          minzoom: 2,
+          maxzoom: b.maxzoom,
+          attribution: GSI_ATTRIBUTION,
+        },
+      ]),
+    ),
+    layers: [
+      ...BASEMAPS.map((b) => ({
+        id: basemapLayerId(b.key),
+        type: "raster" as const,
+        source: basemapSourceId(b.key),
+        layout: { visibility: visibility(b.key === basemap) },
+      })),
+      // 白は写真の上・避難場所の点の下。点はこの後 addShelterLayers で足す。
+      {
+        id: PHOTO_SCRIM_LAYER_ID,
+        type: "background",
+        layout: { visibility: visibility(basemap === "photo") },
+        paint: {
+          "background-color": "#ffffff",
+          "background-opacity": PHOTO_SCRIM_OPACITY,
+        },
+      },
+    ],
+  };
+}
+
+/** 背景地図を切り替える。スタイルの読み込みが済んでから呼ぶこと。 */
+export function applyBasemap(map: MapLibreMap, basemap: BasemapKey): void {
+  for (const b of BASEMAPS) {
+    setVisible(map, basemapLayerId(b.key), b.key === basemap);
+  }
+  setVisible(map, PHOTO_SCRIM_LAYER_ID, basemap === "photo");
+}
+
+function visibility(on: boolean): "visible" | "none" {
+  return on ? "visible" : "none";
+}
+
+function setVisible(map: MapLibreMap, layerId: string, on: boolean): void {
+  if (!map.getLayer(layerId)) return;
+  map.setLayoutProperty(layerId, "visibility", visibility(on));
+}
 
 /**
  * 拠点をまだ持っていない人に最初に見せる場所。

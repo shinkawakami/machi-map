@@ -94,7 +94,7 @@ grep -rl "PrismaClient" .next/static/
 features/
   map/      地図そのもの
     ShelterMap.tsx       組み立て役。state を繋いで、React の外（地図・マーカー）に反映する
-    map-style.ts         MAP_STYLE・レイヤー定義・色・ズームの段（見た目の単一の出どころ）
+    map-style.ts         背景地図の3種・レイヤー定義・色・ズームの段（見た目の単一の出どころ）
     markers.ts           ピン / 拠点の印 / 現在地の印（DOM で描く。地理院タイルはラスタで symbol が使えない）
     camera.ts            パネルに隠れない位置へ寄せる・広い画面の境目（768px）
     interactions.ts      地図を押したときの意味（点なら詳細、そうでなければ起点 or 拡大）
@@ -103,6 +103,8 @@ features/
     use-geolocation.ts   現在地
     MapChips.tsx         地図に重ねる状態（件数 / 絞り込み中 / 読み込み中）。操作は置かない
     LocateButton.tsx     現在地ボタン（パネルの状態に左右されない場所に置く）
+    BasemapControl.tsx   背景地図の切り替え（淡色 / 標準 / 写真。畳んであり、選ぶと閉じる）
+    basemap-store.ts     選んだ背景地図（この端末の localStorage だけ。URL には載せない）
     UrlPlacesPrompt.tsx  URL の拠点と端末の拠点が食い違ったときの3択
   panel/    操作と結果のパネル（狭い画面は下のシート、広い画面は左の柱）
     ShelterPanel.tsx     枠だけ。中身は下の4つが自分で取得する

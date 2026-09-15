@@ -183,7 +183,7 @@ QR コードにして紙に出せます。
 | フレームワーク | Next.js 16.3.4（App Router / Turbopack）+ TypeScript |
 | スタイル | Tailwind CSS v4 |
 | DB / ORM | PostgreSQL 18 + Prisma 7.10.0（`prisma-client` ジェネレータ + `@prisma/adapter-pg`） |
-| 地図 | MapLibre GL JS 6 + 地理院タイル（淡色地図） |
+| 地図 | MapLibre GL JS 6 + 地理院タイル（淡色 / 標準 / 写真を地図上で切り替え。既定は淡色） |
 | ホスティング | Vercel（Functions は `sin1`）+ Neon（`ap-southeast-1`） |
 | 取り込み | `scripts/import-gsi.ts`（CSV を取得してまるごと入れ替え・約60秒） |
 
