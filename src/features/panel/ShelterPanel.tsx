@@ -31,6 +31,10 @@ import type { SameAddressPlace } from "@/lib/shelter";
  * 絞り込みの行が縮み、下の中身が跳ねていた。**同じ 40px を同じ py-1 で包む。**
  * いちばん詰まった形（48px）に寄せたのは、パネルの縦が取り合いだから
  * （絞り込みとタブを1行にまとめたのと同じ話）。
+ *
+ * **取り消しの帯（UndoBar）だけは、この揃えに入れない。** あれは常設の操作ではなく、
+ * 読んでいる面に割り込んで下を押し下げる一時的なものなので、余白を持たない
+ * 40px の細い帯にしてある（的は同じ 40px のまま）。
  */
 export type PanelView =
   /** 災害8種ぶんの最寄りをまとめた表。拠点の「持ち帰れるもの」 */
@@ -262,15 +266,14 @@ export default function ShelterPanel({
         拠点を消したときの帯（上）は畳んだら引っ込めているが、こちらは事情が逆で、
         地図を押し間違えるのは**畳んで地図を広く見ているとき**がいちばん多い。
         出す場所を揃えるより、要るときに出ているほうを取る。
+
+        **どこから移ったかは書かない。** 「起点を「自宅」から移しました」は 14字あり、
+        320px の柱では「元に戻す」と分け合うと入りきらずに切れていた
+        （切れるのは末尾の「移しました」＝何が起きたかを言っている側）。
+        戻る先は押せば戻るもので、ここで読ませる必要は無い。
       */}
       {undoableOrigin && (
-        <UndoBar onUndo={onUndoOrigin}>
-          起点を
-          {undoableOrigin.name
-            ? `「${undoableOrigin.name}」`
-            : originLabel(undoableOrigin)}
-          から移しました
-        </UndoBar>
+        <UndoBar onUndo={onUndoOrigin}>起点を移しました</UndoBar>
       )}
 
       {/*
@@ -429,6 +432,12 @@ export default function ShelterPanel({
  *
  * 拠点の削除と、地図を押して起点が移ったときの2か所で出す。どちらも
  * 「押すつもりが無くても起きうる操作の結果」で、見た目と的の大きさをそろえる。
+ *
+ * **常設の帯より薄くする。** これは読んでいる面に割り込んで下を押し下げるもので、
+ * 12秒で消える（use-timed-offer）。包む余白を持たせず、的の 40px そのままの
+ * 高さにして 48px → 40px。字も 14px → 12px に落とす。**知らせであって、
+ * 読ませたい中身ではない**ので、黒地の中で目を引くのは「元に戻す」だけでいい。
+ * 下の区切り線も外した（黒と白が接するので、線の仕事はもう無い）。
  */
 function UndoBar({
   onUndo,
@@ -438,12 +447,12 @@ function UndoBar({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex shrink-0 items-center gap-2 border-b border-zinc-100 bg-zinc-900 px-4 py-1.5 text-sm text-white">
+    <div className="flex shrink-0 items-center gap-2 bg-zinc-900 px-4 text-xs text-white">
       <span className="min-w-0 flex-1 truncate">{children}</span>
       <button
         type="button"
         onClick={onUndo}
-        className="flex min-h-9 shrink-0 items-center rounded-lg border border-white/30 px-3 text-xs font-medium hover:bg-white/10"
+        className="flex min-h-10 shrink-0 items-center rounded-lg border border-white/30 px-3 text-xs font-medium hover:bg-white/10"
       >
         元に戻す
       </button>
